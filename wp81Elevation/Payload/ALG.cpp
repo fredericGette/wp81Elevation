@@ -47,7 +47,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 {
 
 	HANDLE hFile;
-	hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\win32console.log",                // name of the write
+	hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation.log",                // name of the write
 		GENERIC_WRITE,          // open for writing
 		0,                      // do not share
 		NULL,                   // default security
