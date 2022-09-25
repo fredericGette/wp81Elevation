@@ -114,7 +114,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	write2File(hFile, L"requiredSize=%d\n", requiredSize);
 
 	PTOKEN_USER userToken  = (PTOKEN_USER)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, requiredSize);
-	//PTOKEN_USER userToken  = (PTOKEN_USER)malloc(requiredSize);
 	if (!win32Api.GetTokenInformation(processTokenHandle, TokenUser, userToken, requiredSize, &requiredSize)) 
 	{
 		write2File(hFile, L"Error GetTokenInformation %d\n", GetLastError());
@@ -145,6 +144,47 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 	
 	write2File(hFile, L"Process full path: %ls\n", fullPath);
+	
+	requiredSize = 0;
+	if (!win32Api.GetTokenInformation(processTokenHandle, TokenIntegrityLevel, nullptr, 0, &requiredSize)) 
+	{
+		DWORD error = GetLastError();
+		if (error != ERROR_INSUFFICIENT_BUFFER)
+		{
+			write2File(hFile, L"Error GetTokenInformation %d\n", GetLastError());
+			win32Api.CloseHandle(hFile);
+			return 1;					
+		}
+	}
+	if (requiredSize == 0) 
+	{
+		write2File(hFile, L"Error requiredSize == 0\n");
+		win32Api.CloseHandle(hFile);
+		return 1;
+	}
+	write2File(hFile, L"requiredSize=%d\n", requiredSize);
+	
+	PTOKEN_MANDATORY_LABEL uerToken  = (PTOKEN_MANDATORY_LABEL)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, requiredSize);
+	if (!win32Api.GetTokenInformation(processTokenHandle, TokenIntegrityLevel, uerToken, requiredSize, &requiredSize)) 
+	{
+		write2File(hFile, L"Error GetTokenInformation %d\n", GetLastError());
+		win32Api.CloseHandle(hFile);
+		return 1;		
+	}
+	write2File(hFile, L"uerToken->Label.Sid=0x%08X\n", uerToken->Label.Sid);
+
+	WCHAR userName2[MAX_PATH] = {};
+	DWORD userNameLength2 = _countof(userName2);
+	WCHAR domainName2[MAX_PATH] = {};
+	DWORD domainNameLength2 = _countof(domainName2);
+	sidType = SidTypeUnknown;
+	if (!win32Api.LookupAccountSidW(nullptr, uerToken->Label.Sid, userName2, &userNameLength2, domainName2, &domainNameLength2, &sidType)) 
+	{
+		write2File(hFile, L"Error LookupAccountSid %d\n", GetLastError());
+		win32Api.CloseHandle(hFile);
+		return 1;
+	}
+	write2File(hFile, L"Process integrity level: %ls\n", userName2);
 
 	win32Api.CloseHandle(hFile);
 
