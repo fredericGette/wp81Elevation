@@ -19,6 +19,55 @@
 
 #define SEC_ENTRY __stdcall
 
+//
+// Service State -- for CurrentState
+//
+#define SERVICE_STOPPED                        0x00000001
+#define SERVICE_START_PENDING                  0x00000002
+#define SERVICE_STOP_PENDING                   0x00000003
+#define SERVICE_RUNNING                        0x00000004
+#define SERVICE_CONTINUE_PENDING               0x00000005
+#define SERVICE_PAUSE_PENDING                  0x00000006
+#define SERVICE_PAUSED                         0x00000007
+
+//
+// Controls Accepted  (Bit Mask)
+//
+#define SERVICE_ACCEPT_STOP                    0x00000001
+#define SERVICE_ACCEPT_PAUSE_CONTINUE          0x00000002
+#define SERVICE_ACCEPT_SHUTDOWN                0x00000004
+#define SERVICE_ACCEPT_PARAMCHANGE             0x00000008
+#define SERVICE_ACCEPT_NETBINDCHANGE           0x00000010
+#define SERVICE_ACCEPT_HARDWAREPROFILECHANGE   0x00000020
+#define SERVICE_ACCEPT_POWEREVENT              0x00000040
+#define SERVICE_ACCEPT_SESSIONCHANGE           0x00000080
+#define SERVICE_ACCEPT_PRESHUTDOWN             0x00000100
+#define SERVICE_ACCEPT_TIMECHANGE              0x00000200
+#define SERVICE_ACCEPT_TRIGGEREVENT            0x00000400
+
+//
+// Controls
+//
+#define SERVICE_CONTROL_STOP                   0x00000001
+#define SERVICE_CONTROL_PAUSE                  0x00000002
+#define SERVICE_CONTROL_CONTINUE               0x00000003
+#define SERVICE_CONTROL_INTERROGATE            0x00000004
+#define SERVICE_CONTROL_SHUTDOWN               0x00000005
+#define SERVICE_CONTROL_PARAMCHANGE            0x00000006
+#define SERVICE_CONTROL_NETBINDADD             0x00000007
+#define SERVICE_CONTROL_NETBINDREMOVE          0x00000008
+#define SERVICE_CONTROL_NETBINDENABLE          0x00000009
+#define SERVICE_CONTROL_NETBINDDISABLE         0x0000000A
+#define SERVICE_CONTROL_DEVICEEVENT            0x0000000B
+#define SERVICE_CONTROL_HARDWAREPROFILECHANGE  0x0000000C
+#define SERVICE_CONTROL_POWEREVENT             0x0000000D
+#define SERVICE_CONTROL_SESSIONCHANGE          0x0000000E
+#define SERVICE_CONTROL_PRESHUTDOWN            0x0000000F
+#define SERVICE_CONTROL_TIMECHANGE             0x00000010
+#define SERVICE_CONTROL_TRIGGEREVENT           0x00000020
+
+DECLARE_HANDLE(SERVICE_STATUS_HANDLE);
+
 typedef enum  {
   NameUnknown = 0,
   NameFullyQualifiedDN = 1,
@@ -34,6 +83,33 @@ typedef enum  {
   NameSurname = 14
 } EXTENDED_NAME_FORMAT, *PEXTENDED_NAME_FORMAT;
 
+typedef DWORD (WINAPI *LPHANDLER_FUNCTION_EX)(
+    DWORD    dwControl,
+    DWORD    dwEventType,
+    LPVOID   lpEventData,
+    LPVOID   lpContext
+    );
+	
+typedef struct _SERVICE_STATUS {
+    DWORD   dwServiceType;
+    DWORD   dwCurrentState;
+    DWORD   dwControlsAccepted;
+    DWORD   dwWin32ExitCode;
+    DWORD   dwServiceSpecificExitCode;
+    DWORD   dwCheckPoint;
+    DWORD   dwWaitHint;
+} SERVICE_STATUS, *LPSERVICE_STATUS;	
+
+typedef VOID (WINAPI *LPSERVICE_MAIN_FUNCTIONW)(
+    DWORD   dwNumServicesArgs,
+    LPWSTR  *lpServiceArgVectors
+    );
+
+typedef struct _SERVICE_TABLE_ENTRYW {
+    LPWSTR                      lpServiceName;
+    LPSERVICE_MAIN_FUNCTIONW    lpServiceProc;
+}SERVICE_TABLE_ENTRYW, *LPSERVICE_TABLE_ENTRYW;
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -46,6 +122,8 @@ extern "C" {
 	BOOL WINAPI GetTokenInformation(HANDLE TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, LPVOID TokenInformation, DWORD TokenInformationLength, PDWORD ReturnLength);
 	WINBASEAPI BOOL WINAPI QueryFullProcessImageNameW(HANDLE hProcess, DWORD dwFlags, LPWSTR lpExeName, PDWORD lpdwSize);
 	DWORD WINAPI GetProcessImageFileNameW(HANDLE hProcess, LPWSTR lpImageFileName, DWORD nSize);
+	WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
+	WINBASEAPI DWORD WINAPI WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
 
 	BOOL WINAPI LogonUserExExW(LPTSTR lpszUsername, LPTSTR lpszDomain, LPTSTR lpszPassword, DWORD dwLogonType, DWORD dwLogonProvider, PTOKEN_GROUPS pTokenGroups, PHANDLE phToken, PSID *ppLogonSid, PVOID *ppProfileBuffer, LPDWORD pdwProfileLength, PQUOTA_LIMITS pQuotaLimits);
 	BOOL SEC_ENTRY GetUserNameExW(EXTENDED_NAME_FORMAT NameFormat, LPWSTR lpNameBuffer,PULONG nSize);
@@ -53,6 +131,11 @@ extern "C" {
 	HRESULT WINAPI OpenProcessTokenForQuery(HANDLE ProcessHandle, HANDLE *TokenHandle);
 	
 	BOOL WINAPI LookupAccountSidW(LPCWSTR lpSystemName, PSID lpSid, LPWSTR lpName, LPDWORD cchName, LPWSTR lpReferencedDomainName, LPDWORD cchReferencedDomainName, PSID_NAME_USE peUse);
+	BOOL WINAPI LookupPrivilegeNameW(LPCWSTR lpSystemName, PLUID lpLuid, LPWSTR lpName, LPDWORD cchName);
+	
+	SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerExW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION_EX lpHandlerProc, LPVOID lpContext);
+	BOOL WINAPI SetServiceStatus(SERVICE_STATUS_HANDLE hServiceStatus, LPSERVICE_STATUS lpServiceStatus);
+	WINADVAPI BOOL WINAPI StartServiceCtrlDispatcherW(SERVICE_TABLE_ENTRYW    *lpServiceStartTable);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -99,6 +182,8 @@ public:
 	WIN32API_DEFINE_PROC(GetTokenInformation);
 	WIN32API_DEFINE_PROC(QueryFullProcessImageNameW);
 	WIN32API_DEFINE_PROC(GetProcessImageFileNameW);	
+	WIN32API_DEFINE_PROC(CreateEventW);	
+	WIN32API_DEFINE_PROC(WaitForSingleObject);	
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -106,6 +191,11 @@ public:
 	WIN32API_DEFINE_PROC(OpenProcessTokenForQuery);
 	const HMODULE m_Advapi32;
 	WIN32API_DEFINE_PROC(LookupAccountSidW);	
+	WIN32API_DEFINE_PROC(LookupPrivilegeNameW);
+	const HMODULE m_Sechost;
+	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerExW);	
+	WIN32API_DEFINE_PROC(SetServiceStatus);
+	WIN32API_DEFINE_PROC(StartServiceCtrlDispatcherW);
 
 	Win32Api()
 		: m_Kernelbase(GetKernelBase()),
@@ -120,13 +210,20 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, GetTokenInformation),
 		WIN32API_INIT_PROC(m_Kernelbase, QueryFullProcessImageNameW),
 		WIN32API_INIT_PROC(m_Kernelbase, GetProcessImageFileNameW),	
+		WIN32API_INIT_PROC(m_Kernelbase, CreateEventW),	
+		WIN32API_INIT_PROC(m_Kernelbase, WaitForSingleObject),	
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),
 		m_SecRuntime(LoadLibraryExW(L"SecRuntime.dll", NULL, NULL)),
         WIN32API_INIT_PROC(m_SecRuntime, OpenProcessTokenForQuery),
 		m_Advapi32(LoadLibraryExW(L"Advapi32legacy.dll", NULL, NULL)),
-        WIN32API_INIT_PROC(m_Advapi32, LookupAccountSidW)
+        WIN32API_INIT_PROC(m_Advapi32, LookupAccountSidW),
+		WIN32API_INIT_PROC(m_Advapi32, LookupPrivilegeNameW),
+		m_Sechost(LoadLibraryExW(L"SECHOST.dll", NULL, NULL)),
+        WIN32API_INIT_PROC(m_Sechost, RegisterServiceCtrlHandlerExW),
+		WIN32API_INIT_PROC(m_Sechost, SetServiceStatus),
+		WIN32API_INIT_PROC(m_Sechost, StartServiceCtrlDispatcherW)
 	{};
 
 };
