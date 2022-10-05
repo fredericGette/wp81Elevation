@@ -66,6 +66,14 @@
 #define SERVICE_CONTROL_TIMECHANGE             0x00000010
 #define SERVICE_CONTROL_TRIGGEREVENT           0x00000020
 
+#define TH32CS_SNAPHEAPLIST 0x00000001
+#define TH32CS_SNAPPROCESS  0x00000002
+#define TH32CS_SNAPTHREAD   0x00000004
+#define TH32CS_SNAPMODULE   0x00000008
+#define TH32CS_SNAPMODULE32 0x00000010
+#define TH32CS_SNAPALL      (TH32CS_SNAPHEAPLIST | TH32CS_SNAPPROCESS | TH32CS_SNAPTHREAD | TH32CS_SNAPMODULE)
+#define TH32CS_INHERIT      0x80000000
+
 DECLARE_HANDLE(SERVICE_STATUS_HANDLE);
 
 typedef enum  {
@@ -110,6 +118,50 @@ typedef struct _SERVICE_TABLE_ENTRYW {
     LPSERVICE_MAIN_FUNCTIONW    lpServiceProc;
 }SERVICE_TABLE_ENTRYW, *LPSERVICE_TABLE_ENTRYW;
 
+typedef struct _STARTUPINFOW {
+    DWORD cb;
+    LPWSTR lpReserved;
+    LPWSTR lpDesktop;
+    LPWSTR lpTitle;
+    DWORD dwX;
+    DWORD dwY;
+    DWORD dwXSize;
+    DWORD dwYSize;
+    DWORD dwXCountChars;
+    DWORD dwYCountChars;
+    DWORD dwFillAttribute;
+    DWORD dwFlags;
+    WORD wShowWindow;
+    WORD cbReserved2;
+    LPBYTE lpReserved2;
+    HANDLE hStdInput;
+    HANDLE hStdOutput;
+    HANDLE hStdError;
+  } STARTUPINFOW, *LPSTARTUPINFOW;
+  
+typedef struct _PROCESS_INFORMATION {
+    HANDLE hProcess;
+    HANDLE hThread;
+    DWORD dwProcessId;
+    DWORD dwThreadId;
+  } PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
+  
+typedef struct tagPROCESSENTRY32W
+{
+    DWORD   dwSize;
+    DWORD   cntUsage;
+    DWORD   th32ProcessID;          // this process
+    ULONG_PTR th32DefaultHeapID;
+    DWORD   th32ModuleID;           // associated exe
+    DWORD   cntThreads;
+    DWORD   th32ParentProcessID;    // this process's parent process
+    LONG    pcPriClassBase;         // Base priority of process's threads
+    DWORD   dwFlags;
+    WCHAR   szExeFile[MAX_PATH];    // Path
+} PROCESSENTRY32W;
+typedef PROCESSENTRY32W *  PPROCESSENTRY32W;
+typedef PROCESSENTRY32W *  LPPROCESSENTRY32W;  
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -124,6 +176,9 @@ extern "C" {
 	DWORD WINAPI GetProcessImageFileNameW(HANDLE hProcess, LPWSTR lpImageFileName, DWORD nSize);
 	WINBASEAPI HANDLE WINAPI CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 	WINBASEAPI DWORD WINAPI WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+	WINADVAPI BOOL WINAPI CreateProcessAsUserW(HANDLE hToken, LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
+	WINBASEAPI BOOL WINAPI CreateProcessW(LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
+	WINBASEAPI HANDLE WINAPI OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
 
 	BOOL WINAPI LogonUserExExW(LPTSTR lpszUsername, LPTSTR lpszDomain, LPTSTR lpszPassword, DWORD dwLogonType, DWORD dwLogonProvider, PTOKEN_GROUPS pTokenGroups, PHANDLE phToken, PSID *ppLogonSid, PVOID *ppProfileBuffer, LPDWORD pdwProfileLength, PQUOTA_LIMITS pQuotaLimits);
 	BOOL SEC_ENTRY GetUserNameExW(EXTENDED_NAME_FORMAT NameFormat, LPWSTR lpNameBuffer,PULONG nSize);
@@ -136,6 +191,11 @@ extern "C" {
 	SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerExW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION_EX lpHandlerProc, LPVOID lpContext);
 	BOOL WINAPI SetServiceStatus(SERVICE_STATUS_HANDLE hServiceStatus, LPSERVICE_STATUS lpServiceStatus);
 	WINADVAPI BOOL WINAPI StartServiceCtrlDispatcherW(SERVICE_TABLE_ENTRYW    *lpServiceStartTable);
+	
+	DWORD WTSGetActiveConsoleSessionId();
+	HANDLE WINAPI CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID);
+	BOOL WINAPI Process32FirstW(HANDLE hSnapshot, LPPROCESSENTRY32W lppe);
+	BOOL WINAPI Process32NextW(HANDLE hSnapshot, LPPROCESSENTRY32W lppe);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -184,6 +244,9 @@ public:
 	WIN32API_DEFINE_PROC(GetProcessImageFileNameW);	
 	WIN32API_DEFINE_PROC(CreateEventW);	
 	WIN32API_DEFINE_PROC(WaitForSingleObject);	
+	WIN32API_DEFINE_PROC(CreateProcessAsUserW);	
+	WIN32API_DEFINE_PROC(CreateProcessW);	
+	WIN32API_DEFINE_PROC(OpenProcess);	
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -196,6 +259,11 @@ public:
 	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerExW);	
 	WIN32API_DEFINE_PROC(SetServiceStatus);
 	WIN32API_DEFINE_PROC(StartServiceCtrlDispatcherW);
+	const HMODULE m_Kernel32legacy;
+	WIN32API_DEFINE_PROC(WTSGetActiveConsoleSessionId);
+	WIN32API_DEFINE_PROC(CreateToolhelp32Snapshot);
+	WIN32API_DEFINE_PROC(Process32FirstW);
+	WIN32API_DEFINE_PROC(Process32NextW);
 
 	Win32Api()
 		: m_Kernelbase(GetKernelBase()),
@@ -212,6 +280,9 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, GetProcessImageFileNameW),	
 		WIN32API_INIT_PROC(m_Kernelbase, CreateEventW),	
 		WIN32API_INIT_PROC(m_Kernelbase, WaitForSingleObject),	
+		WIN32API_INIT_PROC(m_Kernelbase, CreateProcessAsUserW),	
+		WIN32API_INIT_PROC(m_Kernelbase, CreateProcessW),	
+		WIN32API_INIT_PROC(m_Kernelbase, OpenProcess),	
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),
@@ -223,7 +294,12 @@ public:
 		m_Sechost(LoadLibraryExW(L"SECHOST.dll", NULL, NULL)),
         WIN32API_INIT_PROC(m_Sechost, RegisterServiceCtrlHandlerExW),
 		WIN32API_INIT_PROC(m_Sechost, SetServiceStatus),
-		WIN32API_INIT_PROC(m_Sechost, StartServiceCtrlDispatcherW)
+		WIN32API_INIT_PROC(m_Sechost, StartServiceCtrlDispatcherW),
+		m_Kernel32legacy(LoadLibraryExW(L"KERNEL32LEGACY.dll", NULL, NULL)),
+        WIN32API_INIT_PROC(m_Kernel32legacy, WTSGetActiveConsoleSessionId),
+		WIN32API_INIT_PROC(m_Kernel32legacy, CreateToolhelp32Snapshot),
+		WIN32API_INIT_PROC(m_Kernel32legacy, Process32FirstW),
+		WIN32API_INIT_PROC(m_Kernel32legacy, Process32NextW)
 	{};
 
 };
