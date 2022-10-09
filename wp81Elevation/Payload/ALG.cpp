@@ -177,6 +177,10 @@ int printAccessTokenInfo(HANDLE hAccessToken)
 		  case SE_PRIVILEGE_ENABLED_BY_DEFAULT:
 			state = L"Enabled Default";
 			break;
+			
+		  case SE_PRIVILEGE_ENABLED+SE_PRIVILEGE_ENABLED_BY_DEFAULT:
+			state = L"Enabled Default";
+			break;	
 
 		  case SE_PRIVILEGE_REMOVED:
 			state = L"Removed";
@@ -190,7 +194,7 @@ int printAccessTokenInfo(HANDLE hAccessToken)
 		write2File(hFile, L"state=%ls\n", state);
 	}
 	
-	////////////////////////// TokenPrivileges ///////////////////////////////
+	////////////////////////// TokenType ///////////////////////////////
 	
 	requiredSize = 0;
 	if (!win32Api.GetTokenInformation(hAccessToken, TokenType, nullptr, 0, &requiredSize)) 
@@ -260,7 +264,7 @@ int printProcessInfo(HANDLE hProcess)
 	HANDLE processToken = nullptr;
 	if (S_OK != win32Api.OpenProcessTokenForQuery(hProcess, &processToken))
 	{
-		write2File(hFile, L"\tError OpenProcessTokenForQuery\n");
+		write2File(hFile, L"\tError OpenProcessTokenForQuery %d\n", GetLastError());
 		return 1;
 	}
 	
@@ -270,7 +274,57 @@ int printProcessInfo(HANDLE hProcess)
 	return 0;
 }
 
-int test()
+// https://learn.microsoft.com/en-us/windows/win32/secauthz/enabling-and-disabling-privileges-in-c--
+BOOL SetPrivilege(
+    HANDLE hToken,          // access token handle
+    LPCWSTR lpszPrivilege,  // name of privilege to enable/disable
+    BOOL bEnablePrivilege   // to enable or disable privilege
+    ) 
+{
+    TOKEN_PRIVILEGES tp;
+    LUID luid;
+
+    if (!win32Api.LookupPrivilegeValueW( 
+            NULL,            // lookup privilege on local system
+            lpszPrivilege,   // privilege to lookup 
+            &luid ) )        // receives LUID of privilege
+    {
+        write2File(hFile, L"LookupPrivilegeValueW error: %u\n", GetLastError() ); 
+        return FALSE; 
+    }
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    if (bEnablePrivilege)
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    else
+        tp.Privileges[0].Attributes = 0;
+	
+    // Enable the privilege or disable all privileges.
+
+    if ( !win32Api.AdjustTokenPrivileges(
+           hToken, 
+           FALSE, 
+           &tp, 
+           sizeof(TOKEN_PRIVILEGES), 
+           (PTOKEN_PRIVILEGES) NULL, 
+           (PDWORD) NULL) )
+    { 
+          write2File(hFile, L"AdjustTokenPrivileges error: %u\n", GetLastError() ); 
+          return FALSE; 
+    } 
+	DWORD result = GetLastError();
+
+    if (result == ERROR_NOT_ALL_ASSIGNED)
+
+    {
+          write2File(hFile, L"The token does not have the specified privilege. \n");
+          return FALSE;
+    } 
+
+    return TRUE;
+}
+
+int test(BOOL isService)
 {
 	write2File(hFile, L"win32Api.m_Kernelbase=0x%08X\n", win32Api.m_Kernelbase);
 	write2File(hFile, L"win32Api.m_Sspicli=0x%08X\n", win32Api.m_Sspicli);
@@ -295,8 +349,35 @@ int test()
 
 	HANDLE hCurrentProcess = GetCurrentProcess();
 	write2File(hFile, L"hCurrentProcess=0x%08X\n", hCurrentProcess);
-
 	printProcessInfo(hCurrentProcess);
+	
+	HANDLE hCurrentProcessToken = NULL;
+	if (!win32Api.OpenProcessToken(hCurrentProcess, TOKEN_ALL_ACCESS, &hCurrentProcessToken))
+	{
+		write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
+		return 1;
+	}
+	write2File(hFile, L"************ hCurrentProcessToken=0x%08X information:\n", hCurrentProcessToken);
+	printAccessTokenInfo(hCurrentProcessToken);
+	
+	DWORD dwSize = 0;
+	PSECURITY_DESCRIPTOR pSD = NULL;
+	if (!win32Api.GetKernelObjectSecurity(hCurrentProcessToken, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, pSD, 0, &dwSize))
+	{
+		HRESULT hr = GetLastError();
+		write2File(hFile, L"Error GetKernelObjectSecurity %d (%d=ERROR_INSUFFICIENT_BUFFER)\n", hr, ERROR_INSUFFICIENT_BUFFER);
+		if (hr != ERROR_INSUFFICIENT_BUFFER)
+			return 1;
+	}
+	pSD = (PSECURITY_DESCRIPTOR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize);
+	if (!win32Api.GetKernelObjectSecurity(hCurrentProcessToken, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, pSD, dwSize, &dwSize))
+	{
+		write2File(hFile, L"Error GetKernelObjectSecurity %d\n", GetLastError());
+		return 1;
+	}
+	write2File(hFile, L"pSD=0x%08X\n", pSD);
+
+
 	
 	HANDLE hProcSnap;
 	hProcSnap = win32Api.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -329,6 +410,16 @@ int test()
 		{
 			write2File(hFile, L"Next process handle=0x%08X\n",hSystemProcess);
 			printProcessInfo(hSystemProcess);
+			if (win32Api.lstrcmpiW(L"WININIT.EXE", pe32.szExeFile) == 0) 
+			{
+				write2File(hFile, L"WININIT.EXE found\n");
+				if (!win32Api.OpenProcessToken(hSystemProcess, TOKEN_ALL_ACCESS, &hSystemToken))
+				{
+					write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
+					return 1;
+				}
+				write2File(hFile, L"WININIT.EXE token=0x%08X\n", hSystemToken);
+			}
 		}
 	}
 	write2File(hFile, L"Error Process32NextW %d (18=ERROR_NO_MORE_FILES)\n", GetLastError());
@@ -362,19 +453,45 @@ int test()
 	write2File(hFile, L"************ defappsLogonToken=0x%08X information:\n", defappsLogonToken);
 	printAccessTokenInfo(defappsLogonToken);
 
-	PROCESS_INFORMATION process_INFORMATION = {};
-	STARTUPINFOW startupinfo = {};
-	ZeroMemory(&startupinfo, sizeof(startupinfo));
-	
-	if(!win32Api.CreateProcessAsUserW(defappsLogonToken, L"C:\\windows\\system32\\XBFGENERATOR.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	if (isService)
 	{
-		write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
-//		return 1;
+		HANDLE dupSystemToken = NULL;
+		if (!win32Api.DuplicateTokenEx(hSystemToken, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation, TokenPrimary, &dupSystemToken))
+		{
+			write2File(hFile, L"Error DuplicateTokenEx %d\n", GetLastError());
+			return 1;
+		}	
+		write2File(hFile, L"************ dupSystemToken=0x%08X information:\n", dupSystemToken);
+		printAccessTokenInfo(dupSystemToken);
+		
+		SetPrivilege(dupSystemToken, L"SeAssignPrimaryTokenPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeIncreaseQuotaPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeSecurityPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeTakeOwnershipPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeLoadDriverPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeBackupPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeRestorePrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeShutdownPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeSystemEnvironmentPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeUndockPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
+		write2File(hFile, L"************ dupSystemToken=0x%08X information:\n", dupSystemToken);
+		printAccessTokenInfo(dupSystemToken);
+
+		PROCESS_INFORMATION process_INFORMATION = {};
+		STARTUPINFOW startupinfo = {};
+		ZeroMemory(&startupinfo, sizeof(startupinfo));
+		
+		if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\ALG.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\Data\\USERS\\Public\\Documents\\console.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\XbfGenerator.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+		{
+			write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
+		}
+		write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
+		write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
 	}
-	write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
-	write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
-   
-	https://stackoverflow.com/questions/50644181/createprocessasuser-process-exits-with-1073741502/50743993#50743993
 
     return 0;
 }
@@ -440,10 +557,11 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	/* Main service code
 	Loop, do some work, block if nothing to do,
 	wait or poll for g_StopEvent... */
-//	while (win32Api.WaitForSingleObject(g_StopEvent, 3000) != WAIT_OBJECT_0)
-//	{
-		test();
-//	}
+	DWORD count = 0;
+	while (win32Api.WaitForSingleObject(g_StopEvent, 3000) != WAIT_OBJECT_0 && count++ < 5)
+	{
+		test(TRUE);
+	}
 
 	ReportStatus(SERVICE_STOP_PENDING);
 	/* Here finalize service...
@@ -457,17 +575,36 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation.log",                // name of the write
-		GENERIC_WRITE,          // open for writing
-		0,                      // do not share
-		NULL,                   // default security
-		CREATE_ALWAYS,          // always create new file 
-		FILE_ATTRIBUTE_NORMAL,  // normal file
-		NULL);                  // no attr. template
+	WIN32_FIND_DATA FindFileData;
+	HANDLE hFind = win32Api.FindFirstFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation.log", &FindFileData);
+	if (hFind == INVALID_HANDLE_VALUE) 
+	{
+		hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation.log",                // name of the write
+			GENERIC_WRITE,          // open for writing
+			0,                      // do not share
+			NULL,                   // default security
+			CREATE_ALWAYS,          // always create new file 
+			FILE_ATTRIBUTE_NORMAL,  // normal file
+			NULL);                  // no attr. template
+	} 
+	else 
+	{
+		hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation2.log",                // name of the write
+			GENERIC_WRITE,          // open for writing
+			0,                      // do not share
+			NULL,                   // default security
+			CREATE_ALWAYS,          // always create new file 
+			FILE_ATTRIBUTE_NORMAL,  // normal file
+			NULL);                  // no attr. template
+
+		FindClose(hFind);
+	}
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
 		return 1;
 	}
+	
+	
 	write2File(hFile, L"Begin wWinMain.\n");
 	
 	SERVICE_TABLE_ENTRYW serviceTable[] = {
@@ -482,6 +619,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		return 0;
 	}
 	write2File(hFile, L"Error StartServiceCtrlDispatcherW : %d\n", GetLastError());
+	test(FALSE);
 	win32Api.CloseHandle(hFile);
 	return 2;
 }

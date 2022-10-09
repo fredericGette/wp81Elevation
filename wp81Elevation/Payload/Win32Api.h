@@ -179,6 +179,11 @@ extern "C" {
 	WINADVAPI BOOL WINAPI CreateProcessAsUserW(HANDLE hToken, LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
 	WINBASEAPI BOOL WINAPI CreateProcessW(LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
 	WINBASEAPI HANDLE WINAPI OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
+	BOOL WINAPI DuplicateTokenEx(HANDLE hExistingToken, DWORD dwDesiredAccess, LPSECURITY_ATTRIBUTES lpTokenAttributes, SECURITY_IMPERSONATION_LEVEL ImpersonationLevel, TOKEN_TYPE TokenType, PHANDLE phNewToken);
+	WINBASEAPI int WINAPI lstrcmpiW(LPCWSTR lpString1, LPCWSTR lpString2);
+	BOOL WINAPI AdjustTokenPrivileges(HANDLE TokenHandle,BOOL DisableAllPrivileges, PTOKEN_PRIVILEGES NewState, DWORD BufferLength, PTOKEN_PRIVILEGES PreviousState, PDWORD ReturnLength);
+	BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle);
+	BOOL WINAPI GetKernelObjectSecurity(HANDLE Handle, SECURITY_INFORMATION RequestedInformation, PSECURITY_DESCRIPTOR pSecurityDescriptor, DWORD nLength, LPDWORD lpnLengthNeeded);
 
 	BOOL WINAPI LogonUserExExW(LPTSTR lpszUsername, LPTSTR lpszDomain, LPTSTR lpszPassword, DWORD dwLogonType, DWORD dwLogonProvider, PTOKEN_GROUPS pTokenGroups, PHANDLE phToken, PSID *ppLogonSid, PVOID *ppProfileBuffer, LPDWORD pdwProfileLength, PQUOTA_LIMITS pQuotaLimits);
 	BOOL SEC_ENTRY GetUserNameExW(EXTENDED_NAME_FORMAT NameFormat, LPWSTR lpNameBuffer,PULONG nSize);
@@ -187,6 +192,7 @@ extern "C" {
 	
 	BOOL WINAPI LookupAccountSidW(LPCWSTR lpSystemName, PSID lpSid, LPWSTR lpName, LPDWORD cchName, LPWSTR lpReferencedDomainName, LPDWORD cchReferencedDomainName, PSID_NAME_USE peUse);
 	BOOL WINAPI LookupPrivilegeNameW(LPCWSTR lpSystemName, PLUID lpLuid, LPWSTR lpName, LPDWORD cchName);
+	BOOL WINAPI LookupPrivilegeValueW(LPCWSTR lpSystemName, LPCWSTR lpName, PLUID lpLuid);
 	
 	SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerExW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION_EX lpHandlerProc, LPVOID lpContext);
 	BOOL WINAPI SetServiceStatus(SERVICE_STATUS_HANDLE hServiceStatus, LPSERVICE_STATUS lpServiceStatus);
@@ -247,6 +253,11 @@ public:
 	WIN32API_DEFINE_PROC(CreateProcessAsUserW);	
 	WIN32API_DEFINE_PROC(CreateProcessW);	
 	WIN32API_DEFINE_PROC(OpenProcess);	
+	WIN32API_DEFINE_PROC(DuplicateTokenEx);
+	WIN32API_DEFINE_PROC(lstrcmpiW);
+	WIN32API_DEFINE_PROC(AdjustTokenPrivileges);
+	WIN32API_DEFINE_PROC(OpenProcessToken);
+	WIN32API_DEFINE_PROC(GetKernelObjectSecurity);
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -255,6 +266,7 @@ public:
 	const HMODULE m_Advapi32;
 	WIN32API_DEFINE_PROC(LookupAccountSidW);	
 	WIN32API_DEFINE_PROC(LookupPrivilegeNameW);
+	WIN32API_DEFINE_PROC(LookupPrivilegeValueW);
 	const HMODULE m_Sechost;
 	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerExW);	
 	WIN32API_DEFINE_PROC(SetServiceStatus);
@@ -283,6 +295,11 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, CreateProcessAsUserW),	
 		WIN32API_INIT_PROC(m_Kernelbase, CreateProcessW),	
 		WIN32API_INIT_PROC(m_Kernelbase, OpenProcess),	
+		WIN32API_INIT_PROC(m_Kernelbase, DuplicateTokenEx),
+		WIN32API_INIT_PROC(m_Kernelbase, lstrcmpiW),
+		WIN32API_INIT_PROC(m_Kernelbase, AdjustTokenPrivileges),
+		WIN32API_INIT_PROC(m_Kernelbase, OpenProcessToken),
+		WIN32API_INIT_PROC(m_Kernelbase, GetKernelObjectSecurity),
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),
@@ -291,6 +308,7 @@ public:
 		m_Advapi32(LoadLibraryExW(L"Advapi32legacy.dll", NULL, NULL)),
         WIN32API_INIT_PROC(m_Advapi32, LookupAccountSidW),
 		WIN32API_INIT_PROC(m_Advapi32, LookupPrivilegeNameW),
+		WIN32API_INIT_PROC(m_Advapi32, LookupPrivilegeValueW),
 		m_Sechost(LoadLibraryExW(L"SECHOST.dll", NULL, NULL)),
         WIN32API_INIT_PROC(m_Sechost, RegisterServiceCtrlHandlerExW),
 		WIN32API_INIT_PROC(m_Sechost, SetServiceStatus),
