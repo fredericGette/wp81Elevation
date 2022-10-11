@@ -44,6 +44,25 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 	write2File(hFile, L"Begin wWinMain.\n");
 	
+	WCHAR text[] = L"Hello, World!";
+
+	if ( win32Api.AllocConsole() == TRUE )
+	{
+		write2File(hFile, L"AllocConsole.\n");
+		
+		win32Api.WriteConsoleW(win32Api.GetStdHandle(STD_OUTPUT_HANDLE), text, 13, NULL, NULL);
+		
+		write2File(hFile, L"WriteConsoleW.\n");
+
+		win32Api.FreeConsole();
+		
+		write2File(hFile, L"FreeConsole.\n");
+	}
+	else
+	{
+		write2File(hFile, L"AllocConsole error %d\n", GetLastError());
+	}
+	
 	win32Api.CloseHandle(hFile);
 	return 0;
 }

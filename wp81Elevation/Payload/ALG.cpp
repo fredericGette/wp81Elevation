@@ -360,25 +360,6 @@ int test(BOOL isService)
 	write2File(hFile, L"************ hCurrentProcessToken=0x%08X information:\n", hCurrentProcessToken);
 	printAccessTokenInfo(hCurrentProcessToken);
 	
-	DWORD dwSize = 0;
-	PSECURITY_DESCRIPTOR pSD = NULL;
-	if (!win32Api.GetKernelObjectSecurity(hCurrentProcessToken, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, pSD, 0, &dwSize))
-	{
-		HRESULT hr = GetLastError();
-		write2File(hFile, L"Error GetKernelObjectSecurity %d (%d=ERROR_INSUFFICIENT_BUFFER)\n", hr, ERROR_INSUFFICIENT_BUFFER);
-		if (hr != ERROR_INSUFFICIENT_BUFFER)
-			return 1;
-	}
-	pSD = (PSECURITY_DESCRIPTOR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwSize);
-	if (!win32Api.GetKernelObjectSecurity(hCurrentProcessToken, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, pSD, dwSize, &dwSize))
-	{
-		write2File(hFile, L"Error GetKernelObjectSecurity %d\n", GetLastError());
-		return 1;
-	}
-	write2File(hFile, L"pSD=0x%08X\n", pSD);
-
-
-	
 	HANDLE hProcSnap;
 	hProcSnap = win32Api.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (INVALID_HANDLE_VALUE == hProcSnap) 
@@ -483,17 +464,36 @@ int test(BOOL isService)
 		STARTUPINFOW startupinfo = {};
 		ZeroMemory(&startupinfo, sizeof(startupinfo));
 		
+		WCHAR szCmdline[]=L"C:\\Data\\USERS\\Public\\Documents\\console.exe test";
 		// https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc786941(v=ws.10)
 		// C:\\DATA\\SHAREDDATA\\PHONETOOLS\\PWTOOLS\\BIN\\WPWPR.EXE
-		if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\OEMSVCHOST.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\OEMSVCHOST.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
 		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\ALG.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
 		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\Data\\USERS\\Public\\Documents\\console.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+		if(!win32Api.CreateProcessAsUserW(dupSystemToken, NULL, szCmdline, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
 		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\XbfGenerator.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
 		{
 			write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
 		}
 		write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
 		write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
+		
+		DWORD count = 0;
+		DWORD waitResult = 0;
+		do
+		{
+			count++;
+			waitResult = win32Api.WaitForSingleObject(process_INFORMATION.hThread, 0);
+			write2File(hFile, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
+		} while (waitResult == WAIT_TIMEOUT && count < 10000);
+		DWORD exitCode;
+		win32Api.GetExitCodeThread(process_INFORMATION.hThread, &exitCode);
+		write2File(hFile, L"Thread exit code: %d (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE);
+		win32Api.GetExitCodeProcess(process_INFORMATION.hProcess, &exitCode);
+		write2File(hFile, L"Process exit code: %x (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE); // 0xc0000135 = missing dll // 0xc0000005 = memory access violation
+
+		win32Api.CloseHandle(process_INFORMATION.hProcess);
+		win32Api.CloseHandle(process_INFORMATION.hThread);
 	}
 
     return 0;

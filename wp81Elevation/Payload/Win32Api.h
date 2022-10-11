@@ -183,7 +183,12 @@ extern "C" {
 	WINBASEAPI int WINAPI lstrcmpiW(LPCWSTR lpString1, LPCWSTR lpString2);
 	BOOL WINAPI AdjustTokenPrivileges(HANDLE TokenHandle,BOOL DisableAllPrivileges, PTOKEN_PRIVILEGES NewState, DWORD BufferLength, PTOKEN_PRIVILEGES PreviousState, PDWORD ReturnLength);
 	BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle);
-	BOOL WINAPI GetKernelObjectSecurity(HANDLE Handle, SECURITY_INFORMATION RequestedInformation, PSECURITY_DESCRIPTOR pSecurityDescriptor, DWORD nLength, LPDWORD lpnLengthNeeded);
+	WINBASEAPI BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
+	WINBASEAPI BOOL WINAPI GetExitCodeProcess(HANDLE hProcess, LPDWORD lpExitCode);
+	WINBASEAPI BOOL WINAPI AllocConsole(VOID);
+	WINBASEAPI BOOL WINAPI FreeConsole(VOID);
+	WINBASEAPI BOOL WINAPI WriteConsoleW(HANDLE hConsoleOutput,CONST VOID *lpBuffer,DWORD nNumberOfCharsToWrite,LPDWORD lpNumberOfCharsWritten,LPVOID lpReserved);
+	WINBASEAPI HANDLE WINAPI GetStdHandle(DWORD nStdHandle);
 
 	BOOL WINAPI LogonUserExExW(LPTSTR lpszUsername, LPTSTR lpszDomain, LPTSTR lpszPassword, DWORD dwLogonType, DWORD dwLogonProvider, PTOKEN_GROUPS pTokenGroups, PHANDLE phToken, PSID *ppLogonSid, PVOID *ppProfileBuffer, LPDWORD pdwProfileLength, PQUOTA_LIMITS pQuotaLimits);
 	BOOL SEC_ENTRY GetUserNameExW(EXTENDED_NAME_FORMAT NameFormat, LPWSTR lpNameBuffer,PULONG nSize);
@@ -257,7 +262,12 @@ public:
 	WIN32API_DEFINE_PROC(lstrcmpiW);
 	WIN32API_DEFINE_PROC(AdjustTokenPrivileges);
 	WIN32API_DEFINE_PROC(OpenProcessToken);
-	WIN32API_DEFINE_PROC(GetKernelObjectSecurity);
+	WIN32API_DEFINE_PROC(GetExitCodeThread);
+	WIN32API_DEFINE_PROC(GetExitCodeProcess);
+	WIN32API_DEFINE_PROC(AllocConsole);
+	WIN32API_DEFINE_PROC(FreeConsole);
+	WIN32API_DEFINE_PROC(WriteConsoleW);
+	WIN32API_DEFINE_PROC(GetStdHandle);
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -299,7 +309,12 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, lstrcmpiW),
 		WIN32API_INIT_PROC(m_Kernelbase, AdjustTokenPrivileges),
 		WIN32API_INIT_PROC(m_Kernelbase, OpenProcessToken),
-		WIN32API_INIT_PROC(m_Kernelbase, GetKernelObjectSecurity),
+		WIN32API_INIT_PROC(m_Kernelbase, GetExitCodeThread),
+		WIN32API_INIT_PROC(m_Kernelbase, GetExitCodeProcess),
+		WIN32API_INIT_PROC(m_Kernelbase, AllocConsole),
+		WIN32API_INIT_PROC(m_Kernelbase, FreeConsole),
+		WIN32API_INIT_PROC(m_Kernelbase, WriteConsoleW),
+		WIN32API_INIT_PROC(m_Kernelbase, GetStdHandle),
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),

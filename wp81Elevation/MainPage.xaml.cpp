@@ -151,8 +151,6 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		debug(L"Error RegCloseKey : %d\n", retCode);
 	}
 
-	// SOFTWARE\\Microsoft\\SecurityManager\\PrincipalClasses\\PRINCIPAL_CLASS_TCB
-	// Executables
 	retCode = win32Api.RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\SecurityManager\\PrincipalClasses\\PRINCIPAL_CLASS_TCB", 0, KEY_ALL_ACCESS, &subKey);
 	if (retCode != ERROR_SUCCESS)
 	{
@@ -217,10 +215,19 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPPERFMONSERVER.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPTOOLSWRAPPER.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\PROGRAMS\\DEVICEREG\\DEVICEREG.EXE", newValueData + newValueDataSize);
+		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\XbfGenerator.exe", newValueData + newValueDataSize);
+		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPR.EXE", newValueData + newValueDataSize);
+		newValueDataSize += appendMultiSz(L"C:\\Data\\USERS\\Public\\Documents\\console.exe", newValueData + newValueDataSize);
 		newValueDataSize++; // add final \0
 		debug(L"newValueDataSize : %d\n", newValueDataSize*2); // convert WCHAR to BYTE
 		debug(L"newValueData : ");
 		debugMultiSz(newValueData);
+
+		retCode = win32Api.RegSetValueExW(subKey, L"Executables", NULL, ValueType, (BYTE*)newValueData, newValueDataSize*2);
+		if (retCode != ERROR_SUCCESS)
+		{
+			debug(L"Error RegSetValueExW 'ObjectName': %d\n", retCode);
+		}
 	}
 	else
 	{
