@@ -29,6 +29,11 @@ DWORD g_CurrentState = 0;
 bool g_SystemShutdown = false;
 HANDLE hFile;
 
+HANDLE g_hChildStd_IN_Rd = NULL;
+HANDLE g_hChildStd_IN_Wr = NULL;
+HANDLE g_hChildStd_OUT_Rd = NULL;
+HANDLE g_hChildStd_OUT_Wr = NULL;
+
 void write2File(HANDLE hFile, WCHAR* format, ...)
 {
 	va_list args;
@@ -324,6 +329,124 @@ BOOL SetPrivilege(
     return TRUE;
 }
 
+int printCreateProcess(HANDLE accessToken, WCHAR* szCmdline)
+{
+	SECURITY_ATTRIBUTES saAttr; 
+	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
+	saAttr.bInheritHandle = TRUE; 
+	saAttr.lpSecurityDescriptor = NULL; 
+	// Create a pipe for the child process's STDOUT. 
+	if (!win32Api.CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 0))
+	{
+		write2File(hFile, L"StdoutRd CreatePipe %d\n", GetLastError());
+		return 1;
+	}
+	// Ensure the read handle to the pipe for STDOUT is not inherited.
+	if (!win32Api.SetHandleInformation(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0))
+	{
+		write2File(hFile, L"Stdout SetHandleInformation %d\n", GetLastError());
+		return 1;
+	}
+	// Create a pipe for the child process's STDIN. 
+	if (!win32Api.CreatePipe(&g_hChildStd_IN_Rd, &g_hChildStd_IN_Wr, &saAttr, 0)) 
+	{
+		write2File(hFile, L"Stdin CreatePipe %d\n", GetLastError());
+		return 1;
+	}
+	// Ensure the write handle to the pipe for STDIN is not inherited. 
+	if (!win32Api.SetHandleInformation(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0))
+	{
+		write2File(hFile, L"Stdin SetHandleInformation %d\n", GetLastError());
+		return 1;
+	}
+
+	write2File(hFile, L"g_hChildStd_OUT_Rd=0x%08X\n", g_hChildStd_OUT_Rd);
+	write2File(hFile, L"g_hChildStd_OUT_Wr=0x%08X\n", g_hChildStd_OUT_Wr);
+	write2File(hFile, L"g_hChildStd_IN_Rd=0x%08X\n", g_hChildStd_IN_Rd);
+	write2File(hFile, L"g_hChildStd_IN_Wr=0x%08X\n", g_hChildStd_IN_Wr);
+
+	PROCESS_INFORMATION process_INFORMATION = {};
+	ZeroMemory(&process_INFORMATION, sizeof(PROCESS_INFORMATION));
+	STARTUPINFOW startupinfo = {};
+	ZeroMemory(&startupinfo, sizeof(STARTUPINFOW));
+	startupinfo.cb = sizeof(STARTUPINFOW); 
+	startupinfo.hStdError = g_hChildStd_OUT_Wr;
+	startupinfo.hStdOutput = g_hChildStd_OUT_Wr;
+	startupinfo.hStdInput = g_hChildStd_IN_Rd;
+	startupinfo.dwFlags |= STARTF_USESTDHANDLES;
+	
+	//WCHAR szCmdline[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
+	// https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc786941(v=ws.10)
+	// C:\\DATA\\SHAREDDATA\\PHONETOOLS\\PWTOOLS\\BIN\\WPWPR.EXE
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\OEMSVCHOST.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\ALG.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\Data\\USERS\\Public\\Documents\\console.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	if(!win32Api.CreateProcessAsUserW(accessToken, NULL, szCmdline, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS | CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE, NULL, NULL, &startupinfo, &process_INFORMATION))
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\XbfGenerator.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	{
+		write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
+	}
+	write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
+	write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
+	
+	if (!win32Api.CloseHandle(g_hChildStd_IN_Wr))
+	{
+		write2File(hFile, L"StdInWr CloseHandle %d\n", GetLastError());
+		return 1;
+	}
+		
+	DWORD count = 0;
+	DWORD waitResult = 0;
+	do
+	{
+		count++;
+		waitResult = win32Api.WaitForSingleObject(process_INFORMATION.hThread, 1000);
+	} while (waitResult == WAIT_TIMEOUT && count < 60);
+	write2File(hFile, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
+	DWORD exitCode;
+	win32Api.GetExitCodeThread(process_INFORMATION.hThread, &exitCode);
+	write2File(hFile, L"Thread exit code: %d (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE);
+	win32Api.GetExitCodeProcess(process_INFORMATION.hProcess, &exitCode);
+	write2File(hFile, L"Process exit code: %x (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE); // 0xc0000135 = missing dll // 0xc0000005 = memory access violation
+
+	win32Api.CloseHandle(process_INFORMATION.hProcess);
+	win32Api.CloseHandle(process_INFORMATION.hThread);
+	
+	win32Api.CloseHandle(g_hChildStd_OUT_Wr);
+	win32Api.CloseHandle(g_hChildStd_IN_Rd);
+	
+	DWORD dwRead, dwWritten; 
+	CHAR chBuf[4096]; 
+	ZeroMemory(chBuf, sizeof(chBuf));
+	BOOL bSuccess = FALSE;
+	write2File(hFile, L"Start reading output\n");
+	for (;;) 
+	{ 
+	  write2File(hFile, L"Start ReadFile\n");
+	  bSuccess = win32Api.ReadFile(g_hChildStd_OUT_Rd, chBuf, 4096, &dwRead, NULL);
+	  if( ! bSuccess || dwRead == 0 ) break; 
+	  write2File(hFile, L"dwRead=%d\n",dwRead);
+
+	  for(DWORD i=0; i<dwRead; i++)
+	  {
+		CHAR c = chBuf[i];
+		if (c >= ' ')
+		{
+			write2File(hFile, L"%c", c);
+		}
+		else
+		{
+			write2File(hFile, L".");
+		}
+	  }
+	} 
+	write2File(hFile, L"Stop reading output\n");
+	win32Api.CloseHandle(g_hChildStd_OUT_Rd);
+	win32Api.CloseHandle(g_hChildStd_IN_Wr);
+		
+	return 0;
+}
+
 int test(BOOL isService)
 {
 	write2File(hFile, L"win32Api.m_Kernelbase=0x%08X\n", win32Api.m_Kernelbase);
@@ -460,40 +583,11 @@ int test(BOOL isService)
 		write2File(hFile, L"************ dupSystemToken=0x%08X information:\n", dupSystemToken);
 		printAccessTokenInfo(dupSystemToken);
 
-		PROCESS_INFORMATION process_INFORMATION = {};
-		STARTUPINFOW startupinfo = {};
-		ZeroMemory(&startupinfo, sizeof(startupinfo));
+		WCHAR szCmdline1[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
+		printCreateProcess(defappsLogonToken, szCmdline1);
 		
-		WCHAR szCmdline[]=L"C:\\Data\\USERS\\Public\\Documents\\console.exe test";
-		// https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc786941(v=ws.10)
-		// C:\\DATA\\SHAREDDATA\\PHONETOOLS\\PWTOOLS\\BIN\\WPWPR.EXE
-		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\OEMSVCHOST.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
-		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\ALG.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
-		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\Data\\USERS\\Public\\Documents\\console.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
-		if(!win32Api.CreateProcessAsUserW(dupSystemToken, NULL, szCmdline, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
-		//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\XbfGenerator.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
-		{
-			write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
-		}
-		write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
-		write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
-		
-		DWORD count = 0;
-		DWORD waitResult = 0;
-		do
-		{
-			count++;
-			waitResult = win32Api.WaitForSingleObject(process_INFORMATION.hThread, 0);
-			write2File(hFile, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
-		} while (waitResult == WAIT_TIMEOUT && count < 10000);
-		DWORD exitCode;
-		win32Api.GetExitCodeThread(process_INFORMATION.hThread, &exitCode);
-		write2File(hFile, L"Thread exit code: %d (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE);
-		win32Api.GetExitCodeProcess(process_INFORMATION.hProcess, &exitCode);
-		write2File(hFile, L"Process exit code: %x (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE); // 0xc0000135 = missing dll // 0xc0000005 = memory access violation
-
-		win32Api.CloseHandle(process_INFORMATION.hProcess);
-		win32Api.CloseHandle(process_INFORMATION.hThread);
+		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
+		printCreateProcess(defappsLogonToken, szCmdline2);
 	}
 
     return 0;
@@ -561,7 +655,7 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	Loop, do some work, block if nothing to do,
 	wait or poll for g_StopEvent... */
 	DWORD count = 0;
-	while (win32Api.WaitForSingleObject(g_StopEvent, 3000) != WAIT_OBJECT_0 && count++ < 5)
+	while (win32Api.WaitForSingleObject(g_StopEvent, 3000) != WAIT_OBJECT_0 && count++ < 1)
 	{
 		test(TRUE);
 	}

@@ -74,6 +74,11 @@
 #define TH32CS_SNAPALL      (TH32CS_SNAPHEAPLIST | TH32CS_SNAPPROCESS | TH32CS_SNAPTHREAD | TH32CS_SNAPMODULE)
 #define TH32CS_INHERIT      0x80000000
 
+#define HANDLE_FLAG_INHERIT 0x00000001
+#define HANDLE_FLAG_PROTECT_FROM_CLOSE 0x00000002
+
+#define STARTF_USESTDHANDLES 0x00000100
+
 DECLARE_HANDLE(SERVICE_STATUS_HANDLE);
 
 typedef enum  {
@@ -189,6 +194,9 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI FreeConsole(VOID);
 	WINBASEAPI BOOL WINAPI WriteConsoleW(HANDLE hConsoleOutput,CONST VOID *lpBuffer,DWORD nNumberOfCharsToWrite,LPDWORD lpNumberOfCharsWritten,LPVOID lpReserved);
 	WINBASEAPI HANDLE WINAPI GetStdHandle(DWORD nStdHandle);
+	WINBASEAPI BOOL WINAPI CreatePipe(PHANDLE hReadPipe, PHANDLE hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
+	WINBASEAPI BOOL WINAPI SetHandleInformation(HANDLE hObject, DWORD dwMask, DWORD dwFlags);
+	WINBASEAPI BOOL WINAPI ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
 
 	BOOL WINAPI LogonUserExExW(LPTSTR lpszUsername, LPTSTR lpszDomain, LPTSTR lpszPassword, DWORD dwLogonType, DWORD dwLogonProvider, PTOKEN_GROUPS pTokenGroups, PHANDLE phToken, PSID *ppLogonSid, PVOID *ppProfileBuffer, LPDWORD pdwProfileLength, PQUOTA_LIMITS pQuotaLimits);
 	BOOL SEC_ENTRY GetUserNameExW(EXTENDED_NAME_FORMAT NameFormat, LPWSTR lpNameBuffer,PULONG nSize);
@@ -268,6 +276,9 @@ public:
 	WIN32API_DEFINE_PROC(FreeConsole);
 	WIN32API_DEFINE_PROC(WriteConsoleW);
 	WIN32API_DEFINE_PROC(GetStdHandle);
+	WIN32API_DEFINE_PROC(CreatePipe);
+	WIN32API_DEFINE_PROC(SetHandleInformation);
+	WIN32API_DEFINE_PROC(ReadFile);
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -315,6 +326,9 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, FreeConsole),
 		WIN32API_INIT_PROC(m_Kernelbase, WriteConsoleW),
 		WIN32API_INIT_PROC(m_Kernelbase, GetStdHandle),
+		WIN32API_INIT_PROC(m_Kernelbase, CreatePipe),
+		WIN32API_INIT_PROC(m_Kernelbase, SetHandleInformation),
+		WIN32API_INIT_PROC(m_Kernelbase, ReadFile),
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),

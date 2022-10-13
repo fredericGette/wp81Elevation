@@ -1,3 +1,8 @@
+//Visual Studio 2012 ARM Phone Tools Command Prompt:
+// cl.exe /c /ZW:nostdlib /EHsc /D "PSAPI_VERSION=2" /D "WINAPI_FAMILY=WINAPI_FAMILY_PHONE_APP" /D "_UITHREADCTXT_SUPPORT=0" /D "_UNICODE" /D "UNICODE" /D "_DEBUG" /MDd Console.cpp
+// LINK.exe /LIBPATH:"C:\Program Files (x86)\Windows Phone Kits\8.1\lib\ARM" /MANIFEST:NO "WindowsPhoneCore.lib" "RuntimeObject.lib" "PhoneAppModelHost.lib" /DEBUG /MACHINE:ARM /NODEFAULTLIB:"kernel32.lib" /NODEFAULTLIB:"ole32.lib" /WINMD /SUBSYSTEM:WINDOWS console.obj
+//
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <wtypes.h>
@@ -44,13 +49,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 	write2File(hFile, L"Begin wWinMain.\n");
 	
+	write2File(hFile, L"pCmdLine=%ls\n", pCmdLine);
+	
 	WCHAR text[] = L"Hello, World!";
 
 	if ( win32Api.AllocConsole() == TRUE )
 	{
 		write2File(hFile, L"AllocConsole.\n");
 		
-		win32Api.WriteConsoleW(win32Api.GetStdHandle(STD_OUTPUT_HANDLE), text, 13, NULL, NULL);
+		HANDLE hStdOutput = win32Api.GetStdHandle(STD_OUTPUT_HANDLE);
+		write2File(hFile, L"hStdOutput=0x%08X\n", hStdOutput);
+		
+		if(!win32Api.WriteConsoleW(hStdOutput, text, 13, NULL, NULL))
+		{
+			write2File(hFile, L"WriteConsoleW error %d\n", GetLastError());
+		}
+		// win32Api.WriteFile(hStdOutput, text, 26, NULL, NULL);
 		
 		write2File(hFile, L"WriteConsoleW.\n");
 
