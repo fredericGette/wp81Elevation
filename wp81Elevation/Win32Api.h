@@ -52,6 +52,8 @@ extern "C" {
 
 	WINBASEAPI BOOL WINAPI CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
 	WINBASEAPI BOOL WINAPI CloseHandle(HANDLE hObject);
+
+	WINBASEAPI BOOL	WINAPI CopyFileW(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -102,6 +104,8 @@ public:
 	WIN32API_DEFINE_PROC(WriteFile);
 	WIN32API_DEFINE_PROC(CreateProcessA);
 	WIN32API_DEFINE_PROC(CloseHandle);
+	const HMODULE m_Kernel32legacy;
+	WIN32API_DEFINE_PROC(CopyFileW);
 
 	Win32Api()
 		: m_Kernelbase(GetKernelBase()),
@@ -119,7 +123,9 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, CreateFileW),
 		WIN32API_INIT_PROC(m_Kernelbase, WriteFile),
 		WIN32API_INIT_PROC(m_Kernelbase, CreateProcessA),
-		WIN32API_INIT_PROC(m_Kernelbase, CloseHandle)
+		WIN32API_INIT_PROC(m_Kernelbase, CloseHandle),
+		m_Kernel32legacy(GetModuleHandleW(L"KERNEL32LEGACY.DLL")),
+		WIN32API_INIT_PROC(m_Kernel32legacy, CopyFileW)
 	{};
 
 };

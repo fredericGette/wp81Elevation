@@ -44,4 +44,7 @@
   <ItemGroup>
     <Page Include="MainPage.xaml" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Payload\ALG.exe" />
+  </ItemGroup>
 </Project>

