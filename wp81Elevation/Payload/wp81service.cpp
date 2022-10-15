@@ -1,6 +1,6 @@
 //Visual Studio 2012 ARM Phone Tools Command Prompt:
-// cl.exe /c /ZW:nostdlib /EHsc /D "PSAPI_VERSION=2" /D "WINAPI_FAMILY=WINAPI_FAMILY_PHONE_APP" /D "_UITHREADCTXT_SUPPORT=0" /D "_UNICODE" /D "UNICODE" /D "_DEBUG" /MDd ALG.cpp
-// LINK.exe /LIBPATH:"C:\Program Files (x86)\Windows Phone Kits\8.1\lib\ARM" /MANIFEST:NO "WindowsPhoneCore.lib" "RuntimeObject.lib" "PhoneAppModelHost.lib" /DEBUG /MACHINE:ARM /NODEFAULTLIB:"kernel32.lib" /NODEFAULTLIB:"ole32.lib" /WINMD /SUBSYSTEM:WINDOWS ALG.obj
+// cl.exe /c /ZW:nostdlib /EHsc /D "PSAPI_VERSION=2" /D "WINAPI_FAMILY=WINAPI_FAMILY_PHONE_APP" /D "_UITHREADCTXT_SUPPORT=0" /D "_UNICODE" /D "UNICODE" /D "_DEBUG" /MDd wp81service.cpp
+// LINK.exe /LIBPATH:"C:\Program Files (x86)\Windows Phone Kits\8.1\lib\ARM" /MANIFEST:NO "WindowsPhoneCore.lib" "RuntimeObject.lib" "PhoneAppModelHost.lib" /DEBUG /MACHINE:ARM /NODEFAULTLIB:"kernel32.lib" /NODEFAULTLIB:"ole32.lib" /WINMD /SUBSYSTEM:WINDOWS wp81service.obj
 //
 // Copy ALG.exe to windows\system32
 // XbfGenerator.exe (XAML Binary Format generator) Application "00000005	0001000000000000	0006000300010000	01c4	fe5440e3-8e00-4e47-9d9c-b8cb621a30e2	fkkem3zpb3x42	" found in cache
@@ -584,10 +584,10 @@ int test(BOOL isService)
 		printAccessTokenInfo(dupSystemToken);
 
 		WCHAR szCmdline1[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
-		printCreateProcess(defappsLogonToken, szCmdline1);
+		//printCreateProcess(defappsLogonToken, szCmdline1);
 		
 		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
-		printCreateProcess(defappsLogonToken, szCmdline2);
+		//printCreateProcess(defappsLogonToken, szCmdline2);
 	}
 
     return 0;
@@ -639,7 +639,7 @@ DWORD WINAPI HandlerEx(DWORD control, DWORD eventType, void *eventData, void *co
 
 void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 {
-	write2File(hFile, L"Begin ServiceMain.\n");
+	write2File(hFile, L"Begin ServiceMain wp81service.\n");
 	
 	// Must be called at start.
 	g_ServiceStatusHandle = win32Api.RegisterServiceCtrlHandlerExW(L"Service test", &HandlerEx, NULL);
@@ -672,35 +672,17 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	WIN32_FIND_DATA FindFileData;
-	HANDLE hFind = win32Api.FindFirstFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation.log", &FindFileData);
-	if (hFind == INVALID_HANDLE_VALUE) 
-	{
-		hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation.log",                // name of the write
-			GENERIC_WRITE,          // open for writing
-			0,                      // do not share
-			NULL,                   // default security
-			CREATE_ALWAYS,          // always create new file 
-			FILE_ATTRIBUTE_NORMAL,  // normal file
-			NULL);                  // no attr. template
-	} 
-	else 
-	{
-		hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81Elevation2.log",                // name of the write
-			GENERIC_WRITE,          // open for writing
-			0,                      // do not share
-			NULL,                   // default security
-			CREATE_ALWAYS,          // always create new file 
-			FILE_ATTRIBUTE_NORMAL,  // normal file
-			NULL);                  // no attr. template
-
-		FindClose(hFind);
-	}
+	hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81service.log",                // name of the write
+		GENERIC_WRITE,          // open for writing
+		0,                      // do not share
+		NULL,                   // default security
+		CREATE_ALWAYS,          // always create new file 
+		FILE_ATTRIBUTE_NORMAL,  // normal file
+		NULL);                  // no attr. template
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
 		return 1;
 	}
-	
 	
 	write2File(hFile, L"Begin wWinMain.\n");
 	

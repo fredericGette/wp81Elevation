@@ -32,6 +32,8 @@ typedef struct _PROCESS_INFORMATION {
 	DWORD dwThreadId;
 } PROCESS_INFORMATION, *PPROCESS_INFORMATION, *LPPROCESS_INFORMATION;
 
+DECLARE_HANDLE(SC_HANDLE);
+typedef SC_HANDLE   *LPSC_HANDLE;
 
 extern "C" {
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -43,6 +45,7 @@ extern "C" {
 	LONG WINAPI RegEnumKeyExW(HKEY, DWORD, LPWSTR, PDWORD, PDWORD, LPWSTR, PDWORD, PFILETIME);
 	LONG WINAPI RegEnumValueW(HKEY, DWORD, LPWSTR, PDWORD, PDWORD, PDWORD, LPBYTE, PDWORD);
 	LONG WINAPI RegSetValueExW(HKEY, LPCWSTR, DWORD, DWORD, const BYTE*, DWORD);
+	LONG WINAPI RegCreateKeyExW(HKEY, LPCWSTR, DWORD, LPWSTR, DWORD, REGSAM, LPSECURITY_ATTRIBUTES, PHKEY, PDWORD);
 
 	WINBASEAPI HANDLE WINAPI FindFirstFileW(LPCWSTR lpFileName, LPWIN32_FIND_DATAW lpFindFileData);
 	WINBASEAPI BOOL WINAPI FindNextFileW(HANDLE hFindFile, LPWIN32_FIND_DATAW lpFindFileData);
@@ -54,6 +57,10 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI CloseHandle(HANDLE hObject);
 
 	WINBASEAPI BOOL	WINAPI CopyFileW(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, BOOL bFailIfExists);
+	
+	WINADVAPI SC_HANDLE WINAPI OpenSCManagerW(LPCWSTR lpMachineName,LPCWSTR lpDatabaseName,DWORD dwDesiredAccess);
+	WINADVAPI SC_HANDLE WINAPI CreateServiceW(SC_HANDLE hSCManager,LPCWSTR lpServiceName,LPCWSTR lpDisplayName,DWORD dwDesiredAccess,DWORD dwServiceType,DWORD dwStartType,DWORD dwErrorControl,LPCWSTR lpBinaryPathName,LPCWSTR lpLoadOrderGroup,LPDWORD lpdwTagId,LPCWSTR lpDependencies,LPCWSTR lpServiceStartName,LPCWSTR lpPassword);
+	WINADVAPI BOOL WINAPI CloseServiceHandle(SC_HANDLE hSCObject);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -97,6 +104,7 @@ public:
 	WIN32API_DEFINE_PROC(RegEnumKeyExW);
 	WIN32API_DEFINE_PROC(RegEnumValueW);
 	WIN32API_DEFINE_PROC(RegSetValueExW);
+	WIN32API_DEFINE_PROC(RegCreateKeyExW);
 	WIN32API_DEFINE_PROC(FindFirstFileW);
 	WIN32API_DEFINE_PROC(FindNextFileW);
 	WIN32API_DEFINE_PROC(FindClose);
@@ -106,6 +114,10 @@ public:
 	WIN32API_DEFINE_PROC(CloseHandle);
 	const HMODULE m_Kernel32legacy;
 	WIN32API_DEFINE_PROC(CopyFileW);
+	const HMODULE m_SecHost;
+	WIN32API_DEFINE_PROC(OpenSCManagerW);
+	WIN32API_DEFINE_PROC(CreateServiceW);
+	WIN32API_DEFINE_PROC(CloseServiceHandle);
 
 	Win32Api()
 		: m_Kernelbase(GetKernelBase()),
@@ -117,6 +129,7 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, RegEnumKeyExW),
 		WIN32API_INIT_PROC(m_Kernelbase, RegEnumValueW),
 		WIN32API_INIT_PROC(m_Kernelbase, RegSetValueExW),
+		WIN32API_INIT_PROC(m_Kernelbase, RegCreateKeyExW),
 		WIN32API_INIT_PROC(m_Kernelbase, FindFirstFileW),
 		WIN32API_INIT_PROC(m_Kernelbase, FindNextFileW),
 		WIN32API_INIT_PROC(m_Kernelbase, FindClose),
@@ -125,7 +138,11 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, CreateProcessA),
 		WIN32API_INIT_PROC(m_Kernelbase, CloseHandle),
 		m_Kernel32legacy(GetModuleHandleW(L"KERNEL32LEGACY.DLL")),
-		WIN32API_INIT_PROC(m_Kernel32legacy, CopyFileW)
+		WIN32API_INIT_PROC(m_Kernel32legacy, CopyFileW),
+		m_SecHost(GetModuleHandleW(L"SECHOST.DLL")),
+		WIN32API_INIT_PROC(m_SecHost, OpenSCManagerW),
+		WIN32API_INIT_PROC(m_SecHost, CreateServiceW),
+		WIN32API_INIT_PROC(m_SecHost, CloseServiceHandle)
 	{};
 
 };

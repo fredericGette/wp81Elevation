@@ -45,6 +45,6 @@
     <Page Include="MainPage.xaml" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Payload\ALG.exe" />
+    <None Include="Payload\wp81service.exe" />
   </ItemGroup>
 </Project>

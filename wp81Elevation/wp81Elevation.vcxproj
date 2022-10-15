@@ -142,10 +142,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Payload\ALG.exe">
+    <None Include="Payload\wp81service.exe">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">true</ExcludedFromBuild>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">true</DeploymentContent>
-      <FileType>Document</FileType>
     </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
