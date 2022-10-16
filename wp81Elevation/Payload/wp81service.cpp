@@ -588,6 +588,8 @@ int test(BOOL isService)
 		
 		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
 		//printCreateProcess(defappsLogonToken, szCmdline2);
+		
+		//https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
 	}
 
     return 0;

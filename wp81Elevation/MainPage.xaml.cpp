@@ -250,7 +250,6 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPPERFMONSERVER.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPTOOLSWRAPPER.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\PROGRAMS\\DEVICEREG\\DEVICEREG.EXE", newValueData + newValueDataSize);
-		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\XbfGenerator.exe", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPR.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81SERVICE.EXE", newValueData + newValueDataSize);
 		newValueDataSize++; // add final \0
