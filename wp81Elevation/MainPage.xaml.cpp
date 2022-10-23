@@ -93,6 +93,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 {
 	Win32Api win32Api;
 
+	TextTest->Text = L"Create service WP81SERVICE in registry... ";
+
 	HKEY HKEY_LOCAL_MACHINE = (HKEY)0x80000002;
 	DWORD retCode;
 
@@ -101,6 +103,7 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegOpenKeyExW : %d\n", retCode);
+		TextTest->Text += L"Failed\n";
 		return;
 	}
 
@@ -109,6 +112,7 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegCreateKeyExW : %d\n", retCode);
+		TextTest->Text += L"Failed\n";
 		return;
 	}
 
@@ -120,6 +124,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'Description': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	wcscpy_s((WCHAR*)ValueData, 100, L"Wp81Service");
@@ -127,6 +133,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'DisplayName': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	wcscpy_s((WCHAR*)ValueData, 100, L"C:\\WINDOWS\\SYSTEM32\\WP81SERVICE.EXE");
@@ -134,6 +142,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'ImagePath': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	// If the service represented by the subkey is a Win32 service, this entry specifies the account name that the service uses to log on to Windows.
@@ -142,6 +152,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'ObjectName': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	*(PDWORD)ValueData = 1; // Normal: If the driver fails to load or initialize, startup proceeds, but a warning message appears.
@@ -149,6 +161,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'ErrorControl': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	*(PDWORD)ValueData = 2; // Automatic: Loaded by Service Control Manager. Specifies that the service is loaded or started automatically.
@@ -156,6 +170,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'Start': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	*(PDWORD)ValueData = 16; // A Win32 program that runs in a process by itself. This type of Win32 service can be started by the service controller.
@@ -163,6 +179,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'Type': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	*(PDWORD)ValueData = 1; // Defines the unrestricted type of service SID for the specified service..
@@ -170,25 +188,35 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegSetValueExW 'ServiceSidType': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	retCode = win32Api.RegCloseKey(wp81serviceKey);
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegCloseKey 'wp81serviceKey': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	retCode = win32Api.RegCloseKey(servicesKey);
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegCloseKey 'servicesKey': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
+
+	TextTest->Text += L"OK\n";
+	TextTest->Text += L"Allow execution of the service WP81SERVICE.EXE and of other interesting files...\n";
 
 	HKEY principalClassTcbKey = {};
 	retCode = win32Api.RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\SecurityManager\\PrincipalClasses\\PRINCIPAL_CLASS_TCB", 0, KEY_ALL_ACCESS, &principalClassTcbKey);
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegOpenKeyExW : %d\n", retCode);
+		TextTest->Text += L"Failed\n";
 		return;
 	}
 
@@ -261,21 +289,30 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		if (retCode != ERROR_SUCCESS)
 		{
 			debug(L"Error RegSetValueExW 'ObjectName': %d\n", retCode);
+			TextTest->Text += L"Failed\n";
+			return;
 		}
 	}
 	else
 	{
 		debug(L"Error RegQueryValueExW 'Start': %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
 	retCode = win32Api.RegCloseKey(principalClassTcbKey);
 	if (retCode != ERROR_SUCCESS)
 	{
 		debug(L"Error RegCloseKey : %d\n", retCode);
+		TextTest->Text += L"Failed\n";
+		return;
 	}
 
+	TextTest->Text += L"OK\n";
+	TextTest->Text += L"Update WP81SERVICE.EXE...";
+
 	Uri^ uri = ref new Uri("ms-appx:///Payload/wp81service.exe");
-	create_task(StorageFile::GetFileFromApplicationUriAsync(uri)).then([win32Api](task<StorageFile^> t)
+	create_task(StorageFile::GetFileFromApplicationUriAsync(uri)).then([=](task<StorageFile^> t)
 	{
 		StorageFile ^storageFile = t.get();
 		Platform::String^ filePath = storageFile->Path;
@@ -285,6 +322,14 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 			debug(L"CopyFileW error: %d\n", GetLastError());
 		}
 		debug(L"File copied\n");
+		create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+			ref new Windows::UI::Core::DispatchedHandler([=]()
+		{
+			TextTest->Text += L"OK\n";
+			TextTest->Text += L"You can now reboot the phone to start the service.\n";
+			TextTest->Text += L"The log file of the service is in folder Documents.\n";
+			TextTest->Text += L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n";
+		})));
 	});
 
 }
