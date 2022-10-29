@@ -224,6 +224,7 @@ extern "C" {
 	WINBASEAPI HANDLE WINAPI OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
 	BOOL WINAPI DuplicateTokenEx(HANDLE hExistingToken, DWORD dwDesiredAccess, LPSECURITY_ATTRIBUTES lpTokenAttributes, SECURITY_IMPERSONATION_LEVEL ImpersonationLevel, TOKEN_TYPE TokenType, PHANDLE phNewToken);
 	WINBASEAPI int WINAPI lstrcmpiW(LPCWSTR lpString1, LPCWSTR lpString2);
+	WINBASEAPI int WINAPI lstrcmpA(LPCSTR lpString1, LPCSTR lpString2);
 	BOOL WINAPI AdjustTokenPrivileges(HANDLE TokenHandle,BOOL DisableAllPrivileges, PTOKEN_PRIVILEGES NewState, DWORD BufferLength, PTOKEN_PRIVILEGES PreviousState, PDWORD ReturnLength);
 	BOOL WINAPI OpenProcessToken(HANDLE ProcessHandle, DWORD DesiredAccess, PHANDLE TokenHandle);
 	WINBASEAPI BOOL WINAPI GetExitCodeThread(HANDLE hThread, LPDWORD lpExitCode);
@@ -313,6 +314,7 @@ public:
 	WIN32API_DEFINE_PROC(OpenProcess);	
 	WIN32API_DEFINE_PROC(DuplicateTokenEx);
 	WIN32API_DEFINE_PROC(lstrcmpiW);
+	WIN32API_DEFINE_PROC(lstrcmpA);
 	WIN32API_DEFINE_PROC(AdjustTokenPrivileges);
 	WIN32API_DEFINE_PROC(OpenProcessToken);
 	WIN32API_DEFINE_PROC(GetExitCodeThread);
@@ -370,6 +372,7 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, OpenProcess),	
 		WIN32API_INIT_PROC(m_Kernelbase, DuplicateTokenEx),
 		WIN32API_INIT_PROC(m_Kernelbase, lstrcmpiW),
+		WIN32API_INIT_PROC(m_Kernelbase, lstrcmpA),
 		WIN32API_INIT_PROC(m_Kernelbase, AdjustTokenPrivileges),
 		WIN32API_INIT_PROC(m_Kernelbase, OpenProcessToken),
 		WIN32API_INIT_PROC(m_Kernelbase, GetExitCodeThread),
