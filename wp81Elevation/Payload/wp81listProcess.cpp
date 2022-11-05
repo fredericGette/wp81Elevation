@@ -2,9 +2,17 @@
 // cl.exe /c /ZW:nostdlib /EHsc /D "PSAPI_VERSION=2" /D "WINAPI_FAMILY=WINAPI_FAMILY_PHONE_APP" /D "_UITHREADCTXT_SUPPORT=0" /D "_UNICODE" /D "UNICODE" /D "_DEBUG" /MDd wp81service.cpp
 // LINK.exe /LIBPATH:"C:\Program Files (x86)\Windows Phone Kits\8.1\lib\ARM" /MANIFEST:NO "WindowsPhoneCore.lib" "RuntimeObject.lib" "PhoneAppModelHost.lib" "Ws2_32.lib" /DEBUG /MACHINE:ARM /NODEFAULTLIB:"kernel32.lib" /NODEFAULTLIB:"ole32.lib" /WINMD /SUBSYSTEM:WINDOWS wp81service.obj
 //
-// curl -v http://192.168.1.28:7171/status
-// curl -v http://192.168.1.28:7171/execute -d '{"login":"my_login","password":"my_password"}'
-// curl -v http://192.168.1.28:7171/stopService
+// Copy ALG.exe to windows\system32
+// XbfGenerator.exe (XAML Binary Format generator) Application "00000005	0001000000000000	0006000300010000	01c4	fe5440e3-8e00-4e47-9d9c-b8cb621a30e2	fkkem3zpb3x42	" found in cache
+// ALG.EXE (Application Layer Gateway)
+//
+// HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\ALG
+//	Start
+//		0x2 automatic
+//		0x3 manual
+//  ObjectName
+//		NT AUTHORITY\LocalService
+//		LocalSystem
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,21 +55,6 @@ void write2File(HANDLE hFile, WCHAR* format, ...)
 	va_end(args);
 }
 
-void sendResponse(SOCKET socket, char* response)
-{
-	char sendbuff[1024];
-	strcpy_s(sendbuff, 1024, "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n");
-	if (response != NULL)
-	{
-		strcpy_s(sendbuff+67, 1024-67, response);
-	}
-	int size = strlen(sendbuff);
-	int byteSent = send(socket, sendbuff, size, 0);
-	if (byteSent == SOCKET_ERROR) {
-		write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
-	}
-}
-
 int recvTimeOutTCP(SOCKET socket, long sec, long usec)
 {
 	// Setup timeval variable
@@ -88,7 +81,8 @@ int waitConnection(SOCKET ListeningSocket)
 	SOCKADDR_IN SenderInfo;
 	// Receiving part
 	char recvbuff[1024];
-	int ByteReceived, i, nlen, SelectTiming;
+	char sendbuff[1024];
+	int ByteReceived, i, nlen, SelectTiming, ByteSent;
 	
 	write2File(hFile, L"Server: listen() during 10s...\n");
 	// Set 10 seconds 10 useconds timeout
@@ -130,7 +124,6 @@ int waitConnection(SOCKET ListeningSocket)
 				// 1. Wait for more connections by calling accept again
 				//    on ListeningSocket (loop)
 				// 2. Start sending or receiving data on NewConnection.
-				ZeroMemory(recvbuff, sizeof(recvbuff));
 				ByteReceived = recv(NewConnection, recvbuff, sizeof(recvbuff), 0);
 
 				// When there is data
@@ -159,10 +152,8 @@ int waitConnection(SOCKET ListeningSocket)
 					// Print the string only, discard other
 					// remaining 'rubbish' in the 1024 buffer size
 					char *requestMethod = recvbuff;
-					char *requestUrl = NULL;
-					char *messageBody = NULL;
+					char *requestUrl;
 					int nbParsedField = 0;
-					int nbCRLF = 0;
 					for (i = 0; i < ByteReceived; i++)
 					{
 						write2File(hFile, L"%c", recvbuff[i]);
@@ -175,42 +166,32 @@ int waitConnection(SOCKET ListeningSocket)
 								requestUrl = recvbuff+i+1;
 							}
 						}
-						if (recvbuff[i] != '\n' && recvbuff[i] != '\r')
-						{
-							nbCRLF = 0;
-						}	
-						if (recvbuff[i] == '\n')
-						{
-							nbCRLF++;
-						}			
-						if (nbCRLF == 2 && messageBody == NULL) // first empty line
-						{
-							messageBody = recvbuff+i+1;
-						}
 					}
 					write2File(hFile, L"\n");
 					write2File(hFile, L"Request Method: %hs\n", requestMethod);
 					write2File(hFile, L"Request URL: %hs\n", requestUrl);
-					write2File(hFile, L"Message Body: %hs\n", messageBody == NULL ? "":messageBody);
 					
-					if (win32Api.lstrcmpA("GET", requestMethod) == 0 && win32Api.lstrcmpA("/status", requestUrl) == 0)
+					if (win32Api.lstrcmpA("/status", requestUrl) == 0)
 					{	
 						write2File(hFile, L"STATUS OK\n");
-						sendResponse(NewConnection, "{\"status\": \"OK\"}\n");
+						strcpy_s(sendbuff, 1024, "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n{\"status\": \"OK\"}\n");
+						int size = strlen(sendbuff);
+						ByteSent = send( NewConnection, sendbuff, size, 0 );
+						if (ByteSent == SOCKET_ERROR) {
+							write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+						}
 						
-					} 
-					else if (win32Api.lstrcmpA("/stopService", requestUrl) == 0)
+					} else if (win32Api.lstrcmpA("/stopService", requestUrl) == 0)
 					{	
 						write2File(hFile, L"Stopping service...\n");
 						SetEvent(g_StopEvent);
-						sendResponse(NewConnection, NULL);
+						strcpy_s(sendbuff, 1024, "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n");
+						int size = strlen(sendbuff);
+						ByteSent = send( NewConnection, sendbuff, size, 0 );
+						if (ByteSent == SOCKET_ERROR) {
+							write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+						}
 					}
-					else if (win32Api.lstrcmpA("POST", requestMethod) == 0 && win32Api.lstrcmpA("/execute", requestUrl) == 0)
-					{	
-						write2File(hFile, L"Execute...\n");
-						sendResponse(NewConnection, NULL);
-					}
-
 					
 				}
 				// No data
@@ -237,6 +218,282 @@ int waitConnection(SOCKET ListeningSocket)
 	}
 
 	return 0;
+}
+
+int printAccessTokenInfo(HANDLE hAccessToken)
+{
+	////////////////////////// TokenUser ///////////////////////////////
+	DWORD requiredSize = 0;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenUser, nullptr, 0, &requiredSize))
+	{
+		DWORD error = GetLastError();
+		if (error != ERROR_INSUFFICIENT_BUFFER)
+		{
+			write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+			return 1;					
+		}
+	}
+	if (requiredSize == 0) 
+	{
+		write2File(hFile, L"\t\tError requiredSize == 0\n");
+		return 1;
+	}
+
+	PTOKEN_USER userToken  = (PTOKEN_USER)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, requiredSize);
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenUser, userToken, requiredSize, &requiredSize)) 
+	{
+		write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+		return 1;		
+	}
+	
+	WCHAR userName[MAX_PATH] = {};
+	DWORD userNameLength = _countof(userName);
+	WCHAR domainName[MAX_PATH] = {};
+	DWORD domainNameLength = _countof(domainName);
+	SID_NAME_USE sidType = SidTypeUnknown;
+	if (!win32Api.LookupAccountSidW(nullptr, userToken->User.Sid, userName, &userNameLength, domainName, &domainNameLength, &sidType)) 
+	{
+		write2File(hFile, L"\t\tError LookupAccountSid %d\n", GetLastError());
+		return 1;
+	}
+	write2File(hFile, L"\t\tProcess owner name: \\\\%ls\\%ls\n", domainName, userName);
+
+	////////////////////////// TokenIntegrityLevel ///////////////////////////////
+
+	requiredSize = 0;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenIntegrityLevel, nullptr, 0, &requiredSize)) 
+	{
+		DWORD error = GetLastError();
+		if (error != ERROR_INSUFFICIENT_BUFFER)
+		{
+			write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+			return 1;					
+		}
+	}
+	if (requiredSize == 0) 
+	{
+		write2File(hFile, L"\t\tError requiredSize == 0\n");
+		return 1;
+	}
+	
+	PTOKEN_MANDATORY_LABEL uerToken  = (PTOKEN_MANDATORY_LABEL)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, requiredSize);
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenIntegrityLevel, uerToken, requiredSize, &requiredSize)) 
+	{
+		write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+		return 1;		
+	}
+
+	WCHAR userName2[MAX_PATH] = {};
+	DWORD userNameLength2 = _countof(userName2);
+	WCHAR domainName2[MAX_PATH] = {};
+	DWORD domainNameLength2 = _countof(domainName2);
+	sidType = SidTypeUnknown;
+	if (!win32Api.LookupAccountSidW(nullptr, uerToken->Label.Sid, userName2, &userNameLength2, domainName2, &domainNameLength2, &sidType)) 
+	{
+		write2File(hFile, L"\t\tError LookupAccountSid %d\n", GetLastError());
+		return 1;
+	}
+	write2File(hFile, L"\t\tProcess integrity level: %ls\n", userName2);
+
+	////////////////////////// TokenPrivileges ///////////////////////////////
+
+	requiredSize = 0;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenPrivileges, nullptr, 0, &requiredSize)) 
+	{
+		DWORD error = GetLastError();
+		if (error != ERROR_INSUFFICIENT_BUFFER)
+		{
+			write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+			return 1;					
+		}
+	}
+	if (requiredSize == 0) 
+	{
+		write2File(hFile, L"\t\tError requiredSize == 0\n");
+		return 1;
+	}
+	
+	PTOKEN_PRIVILEGES tokenPrivileges = (PTOKEN_PRIVILEGES)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, requiredSize);
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenPrivileges, tokenPrivileges , requiredSize, &requiredSize)) 
+	{
+		write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+		return 1;		
+	}
+	write2File(hFile, L"\t\ttokenPrivileges->PrivilegeCount=%d\n", tokenPrivileges->PrivilegeCount);
+
+	for (DWORD i = 0; i < tokenPrivileges->PrivilegeCount; ++i) 
+	{
+		requiredSize = 0;
+		win32Api.LookupPrivilegeNameW(nullptr, &tokenPrivileges->Privileges[i].Luid, nullptr, &requiredSize);
+		if (requiredSize == 0) 
+		{
+			write2File(hFile, L"\t\tError requiredSize == 0\n");
+			return 1;
+		}
+		
+		WCHAR privilegeName[100] = {};
+		if (!win32Api.LookupPrivilegeNameW(nullptr, &tokenPrivileges->Privileges[i].Luid, privilegeName, &requiredSize)) 
+		{
+			write2File(hFile, L"\t\tError LookupPrivilegeName %d\n", GetLastError());
+			return 1;	
+		}
+		write2File(hFile, L"\t\tprivilegeName=%ls ", privilegeName);
+		
+		WCHAR* state = L"Disabled";
+		write2File(hFile, L"(%d) ", tokenPrivileges->Privileges[i].Attributes);
+		switch (tokenPrivileges->Privileges[i].Attributes) {
+		  case SE_PRIVILEGE_ENABLED:
+			state = L"Enabled";
+			break;
+
+		  case SE_PRIVILEGE_ENABLED_BY_DEFAULT:
+			state = L"Enabled Default";
+			break;
+			
+		  case SE_PRIVILEGE_ENABLED+SE_PRIVILEGE_ENABLED_BY_DEFAULT:
+			state = L"Enabled Default";
+			break;	
+
+		  case SE_PRIVILEGE_REMOVED:
+			state = L"Removed";
+			break;
+
+		  case SE_PRIVILEGE_USED_FOR_ACCESS:
+			state = L"Used for access";
+			break;
+		}
+		
+		write2File(hFile, L"state=%ls\n", state);
+	}
+	
+	////////////////////////// TokenType ///////////////////////////////
+	
+	requiredSize = 0;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenType, nullptr, 0, &requiredSize)) 
+	{
+		DWORD error = GetLastError();
+		if (error != ERROR_INSUFFICIENT_BUFFER)
+		{
+			write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+			return 1;					
+		}
+	}
+	if (requiredSize == 0) 
+	{
+		write2File(hFile, L"\t\tError requiredSize == 0\n");
+		return 1;
+	}
+	
+	TOKEN_TYPE tokenType;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenType, &tokenType, requiredSize, &requiredSize)) 
+	{
+		write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+		return 1;		
+	}
+	write2File(hFile, L"\t\ttokenType=%d (1=TokenPrimary)\n", tokenType);
+	
+	////////////////////////// TokenSessionId ///////////////////////////////
+	
+	requiredSize = 0;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenSessionId, nullptr, 0, &requiredSize)) 
+	{
+		DWORD error = GetLastError();
+		if (error != ERROR_INSUFFICIENT_BUFFER)
+		{
+			write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+			return 1;					
+		}
+	}
+	if (requiredSize == 0) 
+	{
+		write2File(hFile, L"\t\tError requiredSize == 0\n");
+		return 1;
+	}
+	
+	DWORD tokenSessionId;
+	if (!win32Api.GetTokenInformation(hAccessToken, TokenSessionId, &tokenSessionId, requiredSize, &requiredSize)) 
+	{
+		write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
+		return 1;		
+	}
+	write2File(hFile, L"\t\ttokenSessionId=%d\n", tokenSessionId);
+	
+	return 0;
+}
+
+int printProcessInfo(HANDLE hProcess)
+{
+	write2File(hFile, L"************ hProcess=0x%08X information:\n",hProcess);
+	
+	WCHAR fullPath[MAX_PATH] = {};
+	DWORD size = _countof(fullPath);
+	if (!win32Api.QueryFullProcessImageNameW(hProcess, 0, fullPath, &size)) 
+	{
+		win32Api.GetProcessImageFileNameW(hProcess, fullPath,_countof(fullPath));
+	}
+	write2File(hFile, L"\tProcess full path: %ls\n", fullPath);
+	
+	HANDLE processToken = nullptr;
+	if (S_OK != win32Api.OpenProcessTokenForQuery(hProcess, &processToken))
+	{
+		write2File(hFile, L"\tError OpenProcessTokenForQuery %d\n", GetLastError());
+		return 1;
+	}
+	
+	write2File(hFile, L"\t************ processToken=0x%08X information:\n",processToken);
+	printAccessTokenInfo(processToken);
+	
+	return 0;
+}
+
+// https://learn.microsoft.com/en-us/windows/win32/secauthz/enabling-and-disabling-privileges-in-c--
+BOOL SetPrivilege(
+    HANDLE hToken,          // access token handle
+    LPCWSTR lpszPrivilege,  // name of privilege to enable/disable
+    BOOL bEnablePrivilege   // to enable or disable privilege
+    ) 
+{
+    TOKEN_PRIVILEGES tp;
+    LUID luid;
+
+    if (!win32Api.LookupPrivilegeValueW( 
+            NULL,            // lookup privilege on local system
+            lpszPrivilege,   // privilege to lookup 
+            &luid ) )        // receives LUID of privilege
+    {
+        write2File(hFile, L"LookupPrivilegeValueW error: %u\n", GetLastError() ); 
+        return FALSE; 
+    }
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    if (bEnablePrivilege)
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    else
+        tp.Privileges[0].Attributes = 0;
+	
+    // Enable the privilege or disable all privileges.
+
+    if ( !win32Api.AdjustTokenPrivileges(
+           hToken, 
+           FALSE, 
+           &tp, 
+           sizeof(TOKEN_PRIVILEGES), 
+           (PTOKEN_PRIVILEGES) NULL, 
+           (PDWORD) NULL) )
+    { 
+          write2File(hFile, L"AdjustTokenPrivileges error: %u\n", GetLastError() ); 
+          return FALSE; 
+    } 
+	DWORD result = GetLastError();
+
+    if (result == ERROR_NOT_ALL_ASSIGNED)
+
+    {
+          write2File(hFile, L"The token does not have the specified privilege. \n");
+          return FALSE;
+    } 
+
+    return TRUE;
 }
 
 int printCreateProcess(HANDLE accessToken, WCHAR* szCmdline)
@@ -285,7 +542,14 @@ int printCreateProcess(HANDLE accessToken, WCHAR* szCmdline)
 	startupinfo.hStdInput = g_hChildStd_IN_Rd;
 	startupinfo.dwFlags |= STARTF_USESTDHANDLES;
 	
+	//WCHAR szCmdline[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
+	// https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc786941(v=ws.10)
+	// C:\\DATA\\SHAREDDATA\\PHONETOOLS\\PWTOOLS\\BIN\\WPWPR.EXE
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\OEMSVCHOST.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\ALG.EXE", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\Data\\USERS\\Public\\Documents\\console.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
 	if(!win32Api.CreateProcessAsUserW(accessToken, NULL, szCmdline, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS | CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE, NULL, NULL, &startupinfo, &process_INFORMATION))
+	//if(!win32Api.CreateProcessAsUserW(dupSystemToken, L"C:\\windows\\system32\\XbfGenerator.exe", NULL, NULL, NULL, false, NORMAL_PRIORITY_CLASS, NULL, NULL, &startupinfo, &process_INFORMATION))
 	{
 		write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
 	}
@@ -350,7 +614,8 @@ int printCreateProcess(HANDLE accessToken, WCHAR* szCmdline)
 	return 0;
 }
 
-void get_system_privileges(PTOKEN_PRIVILEGES privileges)
+void
+get_system_privileges(PTOKEN_PRIVILEGES privileges)
 {
 	//TOKEN_PRIVILEGES privileges;
 	LUID luid;
@@ -501,7 +766,8 @@ void get_system_privileges(PTOKEN_PRIVILEGES privileges)
 	// privileges->Privileges[34].Luid = luid;	
 }
 
-PVOID GetInfoFromToken(HANDLE current_token, TOKEN_INFORMATION_CLASS tic)
+PVOID
+GetInfoFromToken(HANDLE current_token, TOKEN_INFORMATION_CLASS tic)
 {
 	DWORD n;
 	PVOID data;
@@ -520,7 +786,8 @@ PVOID GetInfoFromToken(HANDLE current_token, TOKEN_INFORMATION_CLASS tic)
 }
 
 // see https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
-HANDLE se_create_token_privilege(HANDLE base_token, BOOL isPrimary)
+HANDLE
+se_create_token_privilege(HANDLE base_token, BOOL isPrimary)
 {
 	LUID luid;
 	PLUID pluidAuth;
@@ -634,29 +901,157 @@ HANDLE se_create_token_privilege(HANDLE base_token, BOOL isPrimary)
 	return NULL;
 }
 
-HANDLE getSystemToken()
+
+int test(BOOL isService)
 {
-	HANDLE createdToken = NULL;
+	write2File(hFile, L"win32Api.m_Kernelbase=0x%08X\n", win32Api.m_Kernelbase);
+	write2File(hFile, L"win32Api.m_Sspicli=0x%08X\n", win32Api.m_Sspicli);
+	write2File(hFile, L"win32Api.m_SecRuntime=0x%08X\n", win32Api.m_SecRuntime);
+	write2File(hFile, L"win32Api.m_Advapi32=0x%08X\n", win32Api.m_Advapi32);
+	write2File(hFile, L"win32Api.m_Sechost=0x%08X\n", win32Api.m_Sechost);
+	write2File(hFile, L"win32Api.m_Kernel32legacy=0x%08X\n", win32Api.m_Kernel32legacy);	
 	
+	TCHAR username[1024] = {0};
+	DWORD username_len = 1023;
+	if (!win32Api.GetUserNameExW(NameSamCompatible, username, &username_len))
+	{
+		write2File(hFile, L"Error GetUserNameExW %d\n", GetLastError());
+	}
+	write2File(hFile, L"username=%ls\n",username);
+
+	DWORD activeConsoleSessionId = win32Api.WTSGetActiveConsoleSessionId();
+	write2File(hFile, L"activeConsoleSessionId=0x%08X\n",activeConsoleSessionId);
+
+	DWORD currentProcessId = GetCurrentProcessId();
+	write2File(hFile, L"currentProcessId=0x%08X\n", currentProcessId);
+
 	HANDLE hCurrentProcess = GetCurrentProcess();
 	write2File(hFile, L"hCurrentProcess=0x%08X\n", hCurrentProcess);
+	printProcessInfo(hCurrentProcess);
 	
 	HANDLE hCurrentProcessToken = NULL;
-	if (win32Api.OpenProcessToken(hCurrentProcess, TOKEN_ALL_ACCESS, &hCurrentProcessToken))
-	{
-		write2File(hFile, L"************ hCurrentProcessToken=0x%08X information:\n", hCurrentProcessToken);
-			
-		//https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
-		write2File(hFile, L"se_create_token_privilege....\n");
-		createdToken = se_create_token_privilege(hCurrentProcessToken, TRUE);
-		write2File(hFile, L"************ createdToken=0x%08X information:\n", createdToken);
-	}
-	else
+	if (!win32Api.OpenProcessToken(hCurrentProcess, TOKEN_ALL_ACCESS, &hCurrentProcessToken))
 	{
 		write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
+		return 1;
+	}
+	write2File(hFile, L"************ hCurrentProcessToken=0x%08X information:\n", hCurrentProcessToken);
+	printAccessTokenInfo(hCurrentProcessToken);
+	
+	HANDLE hProcSnap;
+	hProcSnap = win32Api.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (INVALID_HANDLE_VALUE == hProcSnap) 
+	{
+		write2File(hFile, L"Error CreateToolhelp32Snapshot %d\n", GetLastError());
+		return 1;
+	}
+	write2File(hFile, L"hProcSnap=0x%08X\n",hProcSnap);
+	
+	PROCESSENTRY32W pe32;
+	pe32.dwSize = sizeof(PROCESSENTRY32W); 
+			
+	if (!win32Api.Process32FirstW(hProcSnap, &pe32)) {
+			write2File(hFile, L"Error Process32FirstW %d (18=ERROR_NO_MORE_FILES)\n", GetLastError());
+			return 1;
+	}
+	write2File(hFile, L"First process ID=0x%08X (0x00000000=System Idle Process) ExeFile=%ls\n", pe32.th32ProcessID, pe32.szExeFile);
+
+	HANDLE hSystemToken, hSystemProcess;			
+	while (win32Api.Process32NextW(hProcSnap, &pe32)) {
+		write2File(hFile, L"Next process ID=0x%08X ExeFile=%ls\n", pe32.th32ProcessID, pe32.szExeFile);
+		
+		hSystemProcess = win32Api.OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pe32.th32ProcessID);
+		if (hSystemProcess == NULL)
+		{
+			write2File(hFile, L"Error OpenProcess %d (5=ERROR_ACCESS_DENIED)\n",GetLastError());
+		}
+		else
+		{
+			write2File(hFile, L"Next process handle=0x%08X\n",hSystemProcess);
+			printProcessInfo(hSystemProcess);
+			if (win32Api.lstrcmpiW(L"WININIT.EXE", pe32.szExeFile) == 0) 
+			{
+				write2File(hFile, L"WININIT.EXE found\n");
+				if (!win32Api.OpenProcessToken(hSystemProcess, TOKEN_ALL_ACCESS, &hSystemToken))
+				{
+					write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
+					return 1;
+				}
+				write2File(hFile, L"WININIT.EXE token=0x%08X\n", hSystemToken);
+			}
+		}
+	}
+	write2File(hFile, L"Error Process32NextW %d (18=ERROR_NO_MORE_FILES)\n", GetLastError());
+			
+	win32Api.CloseHandle(hProcSnap);
+	
+	
+	
+	HANDLE systemLogonToken = NULL;
+	if (!win32Api.LogonUserExExW(L"SYSTEM", L"NT AUTHORITY", NULL, LOGON32_LOGON_SERVICE, LOGON32_PROVIDER_DEFAULT, NULL, &systemLogonToken, NULL, NULL, NULL, NULL))
+	{
+		write2File(hFile, L"Error LogonUserExExW %d\n", GetLastError());
+		return 1;
+	}
+	
+	write2File(hFile, L"************ systemLogonToken=0x%08X information:\n", systemLogonToken);
+	printAccessTokenInfo(systemLogonToken);
+	
+	HANDLE defappsLogonToken = NULL;
+	SID logonSid = {};
+	PSID pLogonSid = &logonSid;
+	PVOID pProfileBuffer = NULL;
+	DWORD profileLength = 0;
+	QUOTA_LIMITS quotaLimits = {};
+	if (!win32Api.LogonUserExExW(L"DefApps", L"", L"", LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, NULL, &defappsLogonToken, &pLogonSid, &pProfileBuffer, &profileLength, &quotaLimits))
+	{
+		write2File(hFile, L"Error LogonUserExExW %d\n", GetLastError());
+		return 1;
+	}
+	
+	write2File(hFile, L"************ defappsLogonToken=0x%08X information:\n", defappsLogonToken);
+	printAccessTokenInfo(defappsLogonToken);
+
+	if (isService)
+	{
+		HANDLE dupSystemToken = NULL;
+		if (!win32Api.DuplicateTokenEx(hSystemToken, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation, TokenPrimary, &dupSystemToken))
+		{
+			write2File(hFile, L"Error DuplicateTokenEx %d\n", GetLastError());
+			return 1;
+		}	
+		write2File(hFile, L"************ dupSystemToken=0x%08X information:\n", dupSystemToken);
+		printAccessTokenInfo(dupSystemToken);
+		
+		SetPrivilege(dupSystemToken, L"SeAssignPrimaryTokenPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeIncreaseQuotaPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeSecurityPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeTakeOwnershipPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeLoadDriverPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeBackupPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeRestorePrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeShutdownPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeSystemEnvironmentPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeUndockPrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
+		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
+		write2File(hFile, L"************ updated dupSystemToken=0x%08X information:\n", dupSystemToken);
+		printAccessTokenInfo(dupSystemToken);
+		
+		//https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
+		write2File(hFile, L"se_create_token_privilege....\n");
+		HANDLE createdToken = se_create_token_privilege(hCurrentProcessToken, TRUE);
+		write2File(hFile, L"************ createdToken=0x%08X information:\n", createdToken);
+		printAccessTokenInfo(createdToken);
+		
+		WCHAR szCmdline1[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
+		printCreateProcess(createdToken, szCmdline1);
+		
+		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
+		printCreateProcess(createdToken, szCmdline2);
 	}
 
-	return createdToken;
+    return 0;
 }
 
 void ReportStatus(DWORD state)
@@ -863,6 +1258,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		return 0;
 	}
 	write2File(hFile, L"Error StartServiceCtrlDispatcherW : %d\n", GetLastError());
+	test(FALSE);
 	win32Api.CloseHandle(hFile);
 	return 2;
 }
