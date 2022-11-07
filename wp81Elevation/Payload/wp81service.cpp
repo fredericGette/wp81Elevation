@@ -4,6 +4,7 @@
 //
 // curl -v http://192.168.1.28:7171/status
 // curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WPR.EXE -status\"}"
+// curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81service.log
 // curl -v http://192.168.1.28:7171/stopService
 
 #include <stdio.h>
@@ -470,6 +471,52 @@ void sendResponse(SOCKET socket, char* response)
 	}
 }
 
+void sendFile(SOCKET socket, HANDLE file, char* fileName)
+{
+	write2File(hFile, L"sendFile handle=%0x08X\n", file);
+	if (file == NULL)
+	{
+		char sendbuff[1024];
+		ZeroMemory(sendbuff, sizeof(sendbuff));
+		strcpy_s(sendbuff, 1024, "HTTP/1.1 404 FILE NOT FOUND\nConnection: Closed\n\n");
+		int size = strlen(sendbuff);
+		int byteSent = send(socket, sendbuff, size, 0);
+		if (byteSent == SOCKET_ERROR) {
+			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		}
+	}
+	else
+	{
+		char sendbuff[100000];
+		ZeroMemory(sendbuff, sizeof(sendbuff));
+		DWORD offset = 0;
+		strcpy_s(sendbuff, sizeof(sendbuff), "HTTP/1.1 200 OK\nContent-type: application/octet-stream\nContent-Disposition: attachment; filename=\"");
+		offset += 98;
+		strcpy_s(sendbuff+offset, sizeof(sendbuff)-offset, fileName);
+		offset += strlen(fileName);
+		strcpy_s(sendbuff+offset, sizeof(sendbuff)-offset, "\"\nConnection: Closed\n\n");
+		offset += 22;
+		write2File(hFile, L"1 sendbuff=%hs\n", sendbuff);
+		
+		DWORD dwRead; 
+		if(win32Api.ReadFile(file, sendbuff+offset, sizeof(sendbuff)-offset, &dwRead, NULL))
+		{
+			write2File(hFile, L"offset=%d\n", offset);	
+			write2File(hFile, L"dwRead=%d\n", dwRead);	
+			write2File(hFile, L"2 sendbuff=%hs\n", sendbuff);	
+			
+			int byteSent = send(socket, sendbuff, offset+dwRead, 0);
+			if (byteSent == SOCKET_ERROR) {
+				write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			}
+		}
+		else
+		{
+			write2File(hFile, L"ReadFile failed with error: %d\n", GetLastError());
+		}
+	}
+}
+
 int recvTimeOutTCP(SOCKET socket, long sec, long usec)
 {
 	// Setup timeval variable
@@ -568,6 +615,7 @@ int waitConnection(SOCKET ListeningSocket)
 					// remaining 'rubbish' in the 1024 buffer size
 					char *requestMethod = recvbuff;
 					char *requestUrl = NULL;
+					char *queryParam = NULL;
 					char *messageBody = NULL;
 					int nbParsedField = 0;
 					int nbCRLF = 0;
@@ -582,6 +630,11 @@ int waitConnection(SOCKET ListeningSocket)
 							{
 								requestUrl = recvbuff+i+1;
 							}
+						}
+						if (recvbuff[i] == '?' && nbParsedField == 1)
+						{
+							recvbuff[i] = '\0';
+							queryParam = recvbuff+i+1;
 						}
 						if (recvbuff[i] != '\n' && recvbuff[i] != '\r')
 						{
@@ -599,6 +652,7 @@ int waitConnection(SOCKET ListeningSocket)
 					write2File(hFile, L"\n");
 					write2File(hFile, L"Request Method: %hs\n", requestMethod);
 					write2File(hFile, L"Request URL: %hs\n", requestUrl);
+					write2File(hFile, L"Query Param: %hs\n", queryParam == NULL ? "":queryParam);
 					write2File(hFile, L"Message Body: %hs\n", messageBody == NULL ? "":messageBody);
 					
 					if (win32Api.lstrcmpA("GET", requestMethod) == 0 && win32Api.lstrcmpA("/status", requestUrl) == 0)
@@ -669,6 +723,30 @@ int waitConnection(SOCKET ListeningSocket)
 						}
 						
 						cJSON_Delete(messageBodyJson);
+					}
+					else if (win32Api.lstrcmpA("GET", requestMethod) == 0 && win32Api.lstrcmpA("/download", requestUrl) == 0)
+					{
+						strtok(queryParam, "="); // init strtok
+						char *path = strtok(NULL, "="); // find second token
+						WCHAR pathWChar[1024];
+						size_t convertedChars;
+						mbstowcs_s(&convertedChars, pathWChar, strlen(path)+1, path, 1024);
+						write2File(hFile, L"Download file \"%s\"\n", pathWChar);
+						// see https://learn.microsoft.com/en-us/windows/win32/fileio/opening-a-file-for-reading-or-writing
+						// FIXME
+						WIN32_FIND_DATAW FindFileData;
+						HANDLE hFind = win32Api.FindFirstFileW(pathWChar, &FindFileData);
+						if (hFind == INVALID_HANDLE_VALUE) 
+					    {
+							write2File(hFile, L"FindFirstFile failed (%d)\n", GetLastError());
+							sendFile(NewConnection, NULL, NULL);
+					    } 
+					    else 
+					    {
+							sendFile(NewConnection, hFind, "Test.txt");
+							win32Api.FindClose(hFind);
+					    }
+						
 					}
 
 					
