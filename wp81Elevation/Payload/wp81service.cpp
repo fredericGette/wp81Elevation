@@ -471,11 +471,33 @@ void sendResponse(SOCKET socket, char* response)
 	}
 }
 
-void sendFile(SOCKET socket, HANDLE file, char* fileName)
+void sendFile(SOCKET socket, char* path)
 {
-	write2File(hFile, L"sendFile handle=%0x08X\n", file);
-	if (file == NULL)
+	char* fileName = path;
+	for (int i=0; i<strlen(path); i++)
 	{
+		if (path[i]=='\\')
+		{
+			fileName = path+i+1;
+		}
+	}
+	
+	WCHAR pathWChar[1024];
+	size_t convertedChars;
+	mbstowcs_s(&convertedChars, pathWChar, strlen(path)+1, path, 1024);
+	write2File(hFile, L"Download file \"%s\"\n", pathWChar);
+
+	HANDLE file = win32Api.CreateFileW(pathWChar,               // file to open
+                       GENERIC_READ,          // open for reading
+                       FILE_SHARE_READ | FILE_SHARE_WRITE,       // share for reading
+                       NULL,                  // default security
+                       OPEN_EXISTING,         // existing file only
+                       FILE_ATTRIBUTE_NORMAL, // normal file
+                       NULL);                 // no attr. template
+
+	if (file == INVALID_HANDLE_VALUE)
+	{
+		write2File(hFile, L"CreateFileW error %d\n", GetLastError());
 		char sendbuff[1024];
 		ZeroMemory(sendbuff, sizeof(sendbuff));
 		strcpy_s(sendbuff, 1024, "HTTP/1.1 404 FILE NOT FOUND\nConnection: Closed\n\n");
@@ -497,13 +519,13 @@ void sendFile(SOCKET socket, HANDLE file, char* fileName)
 		strcpy_s(sendbuff+offset, sizeof(sendbuff)-offset, "\"\nConnection: Closed\n\n");
 		offset += 22;
 		write2File(hFile, L"1 sendbuff=%hs\n", sendbuff);
+		write2File(hFile, L"file=0x%08X\n", file);	
+		write2File(hFile, L"offset=%d\n", offset);	
 		
 		DWORD dwRead; 
 		if(win32Api.ReadFile(file, sendbuff+offset, sizeof(sendbuff)-offset, &dwRead, NULL))
 		{
-			write2File(hFile, L"offset=%d\n", offset);	
 			write2File(hFile, L"dwRead=%d\n", dwRead);	
-			write2File(hFile, L"2 sendbuff=%hs\n", sendbuff);	
 			
 			int byteSent = send(socket, sendbuff, offset+dwRead, 0);
 			if (byteSent == SOCKET_ERROR) {
@@ -564,8 +586,8 @@ int waitConnection(SOCKET ListeningSocket)
 	default:
 	{
 		// Accept a new connection when available. 'while' always true
-		while (1)
-		{
+		//while (1)
+		//{
 			write2File(hFile, L"Server: connexion...\n");
 			// Reset the NewConnection socket to SOCKET_ERROR
 			// Take note that the NewConnection socket in not listening
@@ -728,28 +750,10 @@ int waitConnection(SOCKET ListeningSocket)
 					{
 						strtok(queryParam, "="); // init strtok
 						char *path = strtok(NULL, "="); // find second token
-						WCHAR pathWChar[1024];
-						size_t convertedChars;
-						mbstowcs_s(&convertedChars, pathWChar, strlen(path)+1, path, 1024);
-						write2File(hFile, L"Download file \"%s\"\n", pathWChar);
 						// see https://learn.microsoft.com/en-us/windows/win32/fileio/opening-a-file-for-reading-or-writing
-						// FIXME
-						WIN32_FIND_DATAW FindFileData;
-						HANDLE hFind = win32Api.FindFirstFileW(pathWChar, &FindFileData);
-						if (hFind == INVALID_HANDLE_VALUE) 
-					    {
-							write2File(hFile, L"FindFirstFile failed (%d)\n", GetLastError());
-							sendFile(NewConnection, NULL, NULL);
-					    } 
-					    else 
-					    {
-							sendFile(NewConnection, hFind, "Test.txt");
-							win32Api.FindClose(hFind);
-					    }
-						
+						sendFile(NewConnection, path);				
 					}
 
-					
 				}
 				// No data
 				else if (ByteReceived == 0)
@@ -767,10 +771,10 @@ int waitConnection(SOCKET ListeningSocket)
 
 			// Well, if there is no more connection in 5 seconds,
 			// just exit this listening loop...
-			write2File(hFile, L"Server: listen() during 5s...\n");
-			if (recvTimeOutTCP(ListeningSocket, 5, 0) == 0)
-				break;
-		}
+			//write2File(hFile, L"Server: listen() during 5s...\n");
+			//if (recvTimeOutTCP(ListeningSocket, 5, 0) == 0)
+			//	break;
+		//}
 	}
 	}
 
@@ -957,7 +961,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 {
 	hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81service.log",                // name of the write
 		GENERIC_WRITE,          // open for writing
-		0,                      // do not share
+		FILE_SHARE_READ,        // share
 		NULL,                   // default security
 		CREATE_ALWAYS,          // always create new file 
 		FILE_ATTRIBUTE_NORMAL,  // normal file

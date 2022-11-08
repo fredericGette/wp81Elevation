@@ -319,17 +319,26 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		debug(L"FilePath : %ls\n", filePath->Data());
 		if (!win32Api.CopyFileW(filePath->Data(), L"C:\\windows\\system32\\wp81service.exe", FALSE))
 		{
-			debug(L"CopyFileW error: %d\n", GetLastError());
+			debug(L"CopyFileW error: %d (32=ERROR_SHARING_VIOLATION)\n", GetLastError());
+			create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+				ref new Windows::UI::Core::DispatchedHandler([=]()
+			{
+				TextTest->Text += L"Failed\n";
+				TextTest->Text += L"Service may already be installed and running.\n";
+			})));
 		}
-		debug(L"File copied\n");
-		create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-			ref new Windows::UI::Core::DispatchedHandler([=]()
+		else
 		{
-			TextTest->Text += L"OK\n";
-			TextTest->Text += L"You can now reboot the phone to start the service.\n";
-			TextTest->Text += L"The log file of the service is in folder Documents.\n";
-			TextTest->Text += L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n";
-		})));
+			debug(L"File copied\n");
+			create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+				ref new Windows::UI::Core::DispatchedHandler([=]()
+			{
+				TextTest->Text += L"OK\n";
+				TextTest->Text += L"You can now reboot the phone to start the service.\n";
+				TextTest->Text += L"The log file of the service is in folder Documents.\n";
+				TextTest->Text += L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n";
+			})));
+		}
 	});
 
 }
