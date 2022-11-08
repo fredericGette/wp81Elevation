@@ -3,7 +3,7 @@ Install a little web server running as a service on a Windows Phone 8.1
 
 Currently, only 4 actions are possible:
 
-GET http://<phone IP address>:7171/status
+GET http://\<phone IP address\>:7171/status
 
 POST http://<phone IP address>:7171/execute
 
