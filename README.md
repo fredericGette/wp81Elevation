@@ -14,7 +14,7 @@ POST http://\<phone IP address\>:7171/execute
 body: {"command":"\<path to an executable file and its parameters\>"}
 ```
 The program is executed by user system with high integrity and all privileges enabled.  
-This action waits the complete execution of the program before returning.  
+This action waits the end of the execution before returning.  
 And the response contains the console output of the executed program.  
 Example of usage: `{"command":"C:\windows\system32\WPR.EXE -status"}`
 - Download a file
