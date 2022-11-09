@@ -36,6 +36,15 @@ Compilation requires Visual Studio 2015 with Windows Phone 8.1 support.
 
 Execution requires a Windows Phone 8.1 rooted with [WPinternals](https://github.com/ReneLergner/WPinternals).
 
-## How to add a file into a package .apx
+## How to add a file into a .apx and build the package.
 
+![add item](vscode01.jpg)
+
+![exclude from build](vscode02.jpg)
+
+![create package](vscode03.jpg)
+
+![don't upload to store](vscode04.jpg)
+
+![configuration](vscode05.jpg)
 
