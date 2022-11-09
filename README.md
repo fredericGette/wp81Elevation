@@ -1,6 +1,8 @@
 # wp81Elevation
 Install a little web server running as a service on a Windows Phone 8.1
 
+## Features
+
 Currently, only 4 actions are possible:
 
 - Get the status of the service
@@ -27,6 +29,8 @@ Example of usage: `http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\D
 GET or POST http://\<phone IP address\>:7171/stopService
 ```
 Could be useful to update the .exe of the service.
+
+## Miscellaneous
 
 The service writes all its logs into `C:\Data\USERS\Public\Documents\wp81service.log`. This file is overriden when the service starts.
 
