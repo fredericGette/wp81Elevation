@@ -52,3 +52,12 @@ Execution requires a Windows Phone 8.1 rooted with [WPinternals](https://github.
 
 ![configuration](vscode05.jpg)
 
+## Credits
+
+[JSON read/write](https://github.com/DaveGamble/cJSON)
+
+[System token creation](https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp)
+
+[Winsock2 server](https://www.winsocketdotnetworkprogramming.com/winsock2programming/winsock2advancedcode1c.html)
+
+[DLL import](https://github.com/tandasat/SecRuntimeSample)
