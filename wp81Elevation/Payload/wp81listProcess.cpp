@@ -27,7 +27,7 @@ void write2File(HANDLE hFile, WCHAR* format, ...)
 }
 
 
-int printAccessTokenInfo(HANDLE hAccessToken)
+int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 {
 	////////////////////////// TokenUser ///////////////////////////////
 	DWORD requiredSize = 0;
@@ -198,33 +198,7 @@ int printAccessTokenInfo(HANDLE hAccessToken)
 		return 1;		
 	}
 	write2File(hFile, L"\t\ttokenType=%d (1=TokenPrimary)\n", tokenType);
-	
-	////////////////////////// TokenSessionId ///////////////////////////////
-	
-	requiredSize = 0;
-	if (!win32Api.GetTokenInformation(hAccessToken, TokenSessionId, nullptr, 0, &requiredSize)) 
-	{
-		DWORD error = GetLastError();
-		if (error != ERROR_INSUFFICIENT_BUFFER)
-		{
-			write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
-			return 1;					
-		}
-	}
-	if (requiredSize == 0) 
-	{
-		write2File(hFile, L"\t\tError requiredSize == 0\n");
-		return 1;
-	}
-	
-	DWORD tokenSessionId;
-	if (!win32Api.GetTokenInformation(hAccessToken, TokenSessionId, &tokenSessionId, requiredSize, &requiredSize)) 
-	{
-		write2File(hFile, L"\t\tError GetTokenInformation %d\n", GetLastError());
-		return 1;		
-	}
-	write2File(hFile, L"\t\ttokenSessionId=%d\n", tokenSessionId);
-	
+		
 	return 0;
 }
 
@@ -239,10 +213,10 @@ int printProcessInfo(HANDLE hProcess, cJSON *processJson)
 		win32Api.GetProcessImageFileNameW(hProcess, fullPath,_countof(fullPath));
 	}
 	write2File(hFile, L"\tProcess full path: %ls\n", fullPath);
-	// char fullPathChar[1024];
-	// size_t convertedChars;
-	// wcstombs_s(&convertedChars, fullPathChar, 1024, fullPath, 1024);
-	// cJSON_AddStringToObject(processJson, "FullPath", fullPathChar);
+	char fullPathChar[1024];
+	size_t convertedChars;
+	wcstombs_s(&convertedChars, fullPathChar, 1024, fullPath, 1024);
+	cJSON_AddStringToObject(processJson, "FullPath", fullPathChar);
 	
 	HANDLE processToken = nullptr;
 	if (S_OK != win32Api.OpenProcessTokenForQuery(hProcess, &processToken))
@@ -252,7 +226,7 @@ int printProcessInfo(HANDLE hProcess, cJSON *processJson)
 	}
 	
 	write2File(hFile, L"\t************ processToken=0x%08X information:\n",processToken);
-	printAccessTokenInfo(processToken);
+	printAccessTokenInfo(processToken, processJson);
 	
 	return 0;
 }
@@ -329,7 +303,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	win32Api.CloseHandle(hFile);
 	
 	char *result = cJSON_PrintUnformatted(resultJson);
-	printf("json:%s\n",result);
+	printf("%s\n",result);
 	free(result);
 
 	return 0;
