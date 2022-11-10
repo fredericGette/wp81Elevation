@@ -4,6 +4,7 @@
 //
 // curl -v http://192.168.1.28:7171/status
 // curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WPR.EXE -status\"}"
+// curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTPROCESS.EXE\"}"
 // curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81service.log
 // curl -v http://192.168.1.28:7171/stopService
 
@@ -34,7 +35,7 @@ void write2File(HANDLE hFile, WCHAR* format, ...)
 	va_list args;
 	va_start(args, format);
 
-	WCHAR buffer[1000];
+	WCHAR buffer[10000];
 	_vsnwprintf_s(buffer, sizeof(buffer), format, args);
 
 	DWORD dwBytesToWrite = wcslen(buffer) * sizeof(WCHAR);
@@ -458,11 +459,11 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, char* output, size_t outputSiz
 
 void sendResponse(SOCKET socket, char* response)
 {
-	char sendbuff[1024];
-	strcpy_s(sendbuff, 1024, "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n");
+	char sendbuff[10000];
+	strcpy_s(sendbuff, 10000, "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n");
 	if (response != NULL)
 	{
-		strcpy_s(sendbuff+67, 1024-67, response);
+		strcpy_s(sendbuff+67, 10000-67, response);
 	}
 	int size = strlen(sendbuff);
 	int byteSent = send(socket, sendbuff, size, 0);
@@ -714,13 +715,13 @@ int waitConnection(SOCKET ListeningSocket)
 							mbstowcs_s(&convertedChars, commandWChar, strlen(command->valuestring)+1, command->valuestring, 1024);
 							write2File(hFile, L"commandWChar=%s\n", commandWChar);
 							HANDLE systemToken = getSystemToken();
-							char output[4096];
-							execute(systemToken, commandWChar, output, 4096);
+							char output[10000];
+							execute(systemToken, commandWChar, output, 10000);
 							write2File(hFile, L"output:\n[begin]\n%hs\n[end]\n", output);
 							cJSON *responseJson = cJSON_CreateObject();
-							cJSON *outputsArray = cJSON_AddArrayToObject(responseJson, "outputs");
+							cJSON *outputsArray = cJSON_AddArrayToObject(responseJson, "output");
 							char *string = output;
-							for (int i=0; i<4096; i++)
+							for (int i=0; i<10000; i++)
 							{
 								if (output[i] == '\r')
 								{

@@ -280,6 +280,7 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		newValueDataSize += appendMultiSz(L"C:\\PROGRAMS\\DEVICEREG\\DEVICEREG.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WPR.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81SERVICE.EXE", newValueData + newValueDataSize);
+		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81LISTPROCESS.EXE", newValueData + newValueDataSize);
 		newValueDataSize++; // add final \0
 		debug(L"newValueDataSize : %d\n", newValueDataSize*2); // convert WCHAR to BYTE
 		debug(L"newValueData : ");
@@ -334,11 +335,37 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 				ref new Windows::UI::Core::DispatchedHandler([=]()
 			{
 				TextTest->Text += L"OK\n";
-				TextTest->Text += L"You can now reboot the phone to start the service.\n";
-				TextTest->Text += L"The log file of the service is in folder Documents.\n";
-				TextTest->Text += L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n";
+				TextTest->Text += L"Update WP81LISTPROCESS.EXE...";
+				Uri^ uri2 = ref new Uri("ms-appx:///Payload/wp81listprocess.exe");
+				create_task(StorageFile::GetFileFromApplicationUriAsync(uri2)).then([=](task<StorageFile^> t)
+				{
+					StorageFile ^storageFile = t.get();
+					Platform::String^ filePath = storageFile->Path;
+					debug(L"FilePath : %ls\n", filePath->Data());
+					if (!win32Api.CopyFileW(filePath->Data(), L"C:\\windows\\system32\\wp81listprocess.exe", FALSE))
+					{
+						debug(L"CopyFileW error: %d (32=ERROR_SHARING_VIOLATION)\n", GetLastError());
+						create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+							ref new Windows::UI::Core::DispatchedHandler([=]()
+						{
+							TextTest->Text += L"Failed\n";
+							TextTest->Text += L"Executable may already be installed and running.\n";
+						})));
+					}
+					else
+					{
+						debug(L"File copied\n");
+						create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
+							ref new Windows::UI::Core::DispatchedHandler([=]()
+						{
+							TextTest->Text += L"OK\n";
+							TextTest->Text += L"You can now reboot the phone to start the service.\n";
+							TextTest->Text += L"The log file of the service is in folder Documents.\n";
+							TextTest->Text += L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n";
+						})));
+					}
+				});
 			})));
 		}
 	});
-
 }
