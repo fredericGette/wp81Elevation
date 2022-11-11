@@ -26,6 +26,15 @@ void write2File(HANDLE hFile, WCHAR* format, ...)
 	va_end(args);
 }
 
+void addWString2Json(cJSON *json, char* name, WCHAR *wValue)
+{
+	size_t size = wcslen(wValue);
+	char *cValue = (char*)malloc(size+1);
+	size_t convertedChars;
+	wcstombs_s(&convertedChars, cValue, size+1, wValue, size);
+	cJSON_AddStringToObject(json, name, cValue);
+	free(cValue);
+}
 
 int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 {
@@ -64,6 +73,8 @@ int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 		return 1;
 	}
 	write2File(hFile, L"\t\tProcess owner name: \\\\%ls\\%ls\n", domainName, userName);
+	addWString2Json(processJson, "domainName", domainName);
+	addWString2Json(processJson, "userName", userName);
 
 	////////////////////////// TokenIntegrityLevel ///////////////////////////////
 
@@ -90,17 +101,18 @@ int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 		return 1;		
 	}
 
-	WCHAR userName2[MAX_PATH] = {};
-	DWORD userNameLength2 = _countof(userName2);
+	WCHAR integrityLevel[MAX_PATH] = {};
+	DWORD iLevelLength = _countof(integrityLevel);
 	WCHAR domainName2[MAX_PATH] = {};
 	DWORD domainNameLength2 = _countof(domainName2);
 	sidType = SidTypeUnknown;
-	if (!win32Api.LookupAccountSidW(nullptr, uerToken->Label.Sid, userName2, &userNameLength2, domainName2, &domainNameLength2, &sidType)) 
+	if (!win32Api.LookupAccountSidW(nullptr, uerToken->Label.Sid, integrityLevel, &iLevelLength, domainName2, &domainNameLength2, &sidType)) 
 	{
 		write2File(hFile, L"\t\tError LookupAccountSid %d\n", GetLastError());
 		return 1;
 	}
-	write2File(hFile, L"\t\tProcess integrity level: %ls\n", userName2);
+	write2File(hFile, L"\t\tProcess integrity level: %ls\n", integrityLevel);
+	addWString2Json(processJson, "integrityLevel", integrityLevel);
 
 	////////////////////////// TokenPrivileges ///////////////////////////////
 
@@ -128,6 +140,7 @@ int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 	}
 	write2File(hFile, L"\t\ttokenPrivileges->PrivilegeCount=%d\n", tokenPrivileges->PrivilegeCount);
 
+	cJSON *privilegeArray = cJSON_AddArrayToObject(processJson, "privileges");
 	for (DWORD i = 0; i < tokenPrivileges->PrivilegeCount; ++i) 
 	{
 		requiredSize = 0;
@@ -145,6 +158,9 @@ int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 			return 1;	
 		}
 		write2File(hFile, L"\t\tprivilegeName=%ls ", privilegeName);
+		
+		cJSON *privilege = cJSON_CreateObject();
+		addWString2Json(privilege, "name", privilegeName);
 		
 		WCHAR* state = L"Disabled";
 		write2File(hFile, L"(%d) ", tokenPrivileges->Privileges[i].Attributes);
@@ -171,6 +187,8 @@ int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 		}
 		
 		write2File(hFile, L"state=%ls\n", state);
+		addWString2Json(privilege, "state", state);
+		cJSON_AddItemToArray(privilegeArray, privilege);
 	}
 	
 	////////////////////////// TokenType ///////////////////////////////
@@ -198,6 +216,13 @@ int printAccessTokenInfo(HANDLE hAccessToken, cJSON *processJson)
 		return 1;		
 	}
 	write2File(hFile, L"\t\ttokenType=%d (1=TokenPrimary)\n", tokenType);
+	
+	char *cTokenType = "TokenImpersonation";
+	if (tokenType == 1)
+	{
+		cTokenType = "TokenPrimary";
+	}
+	cJSON_AddStringToObject(processJson, "tokenType", cTokenType);
 		
 	return 0;
 }
@@ -213,10 +238,7 @@ int printProcessInfo(HANDLE hProcess, cJSON *processJson)
 		win32Api.GetProcessImageFileNameW(hProcess, fullPath,_countof(fullPath));
 	}
 	write2File(hFile, L"\tProcess full path: %ls\n", fullPath);
-	char fullPathChar[1024];
-	size_t convertedChars;
-	wcstombs_s(&convertedChars, fullPathChar, 1024, fullPath, 1024);
-	cJSON_AddStringToObject(processJson, "FullPath", fullPathChar);
+	addWString2Json(processJson, "fullPath", fullPath);
 	
 	HANDLE processToken = nullptr;
 	if (S_OK != win32Api.OpenProcessTokenForQuery(hProcess, &processToken))
@@ -255,7 +277,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	write2File(hFile, L"hProcSnap=0x%08X\n",hProcSnap);
 	
 	cJSON *resultJson = cJSON_CreateObject();
-	cJSON *processArray = cJSON_AddArrayToObject(resultJson, "process");
+	cJSON *processArray = cJSON_AddArrayToObject(resultJson, "processes");
 	
 	PROCESSENTRY32W pe32;
 	pe32.dwSize = sizeof(PROCESSENTRY32W); 
@@ -266,22 +288,16 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 	write2File(hFile, L"First process ID=0x%08X (0x00000000=System Idle Process) ExeFile=%ls\n", pe32.th32ProcessID, pe32.szExeFile);
 	cJSON *processJson = cJSON_CreateObject();
-	cJSON_AddNumberToObject(processJson, "ID", pe32.th32ProcessID);
-	char exeFileChar[1024];
-	size_t convertedChars;
-	wcstombs_s(&convertedChars, exeFileChar, 1024, pe32.szExeFile, 1024);
-	cJSON_AddStringToObject(processJson, "ExeFile", exeFileChar);
+	cJSON_AddNumberToObject(processJson, "id", pe32.th32ProcessID);
+	addWString2Json(processJson, "exeFile", pe32.szExeFile);
 	cJSON_AddItemToArray(processArray, processJson);
 
 	HANDLE hSystemProcess;	
 	while (win32Api.Process32NextW(hProcSnap, &pe32)) {
 		write2File(hFile, L"Next process ID=0x%08X ExeFile=%ls\n", pe32.th32ProcessID, pe32.szExeFile);
 		cJSON *processJson = cJSON_CreateObject();
-		cJSON_AddNumberToObject(processJson, "ID", pe32.th32ProcessID);
-		char exeFileChar[1024];
-		size_t convertedChars;
-		wcstombs_s(&convertedChars, exeFileChar, 1024, pe32.szExeFile, 1024);
-		cJSON_AddStringToObject(processJson, "ExeFile", exeFileChar);
+		cJSON_AddNumberToObject(processJson, "id", pe32.th32ProcessID);
+		addWString2Json(processJson, "exeFile", pe32.szExeFile);
 		
 		hSystemProcess = win32Api.OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pe32.th32ProcessID);
 		if (hSystemProcess == NULL)
