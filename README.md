@@ -15,7 +15,7 @@ Returns HTTP 200 and `{"status":"OK"}` when the service is running.
 POST http://\<phone IP address\>:7171/execute
 body: 
 {
-  "command":"\<path to an executable file and its parameters\>",
+  "command":"<path to an executable file and its parameters>",
   (optional)"resultType":"(default)TEXT|JSON"
 }
 ```
