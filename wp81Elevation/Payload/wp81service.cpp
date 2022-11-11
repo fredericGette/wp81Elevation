@@ -6,6 +6,7 @@
 // curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WPR.EXE -status\"}"
 // curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTPROCESS.EXE\",\"resultType\":\"JSON\"}"
 // curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81service.log
+// curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81listProcess.log
 // curl -v http://192.168.1.28:7171/stopService
 
 #include <stdio.h>
@@ -17,6 +18,11 @@
 #include "Win32Api.h"
 #include "cJSON.h"
 
+
+typedef enum  {
+  ResultTypeText = 0,
+  ResultTypeJson = 1
+} RESULT_TYPE;
 
 Win32Api win32Api;
 SERVICE_STATUS_HANDLE g_ServiceStatusHandle;
@@ -363,7 +369,7 @@ HANDLE getSystemToken()
 	return createdToken;
 }
 
-int executeText(HANDLE accessToken, WCHAR* szCmdline, char* output, size_t outputSize)
+int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult)
 {
 	SECURITY_ATTRIBUTES saAttr; 
 	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
@@ -428,7 +434,7 @@ int executeText(HANDLE accessToken, WCHAR* szCmdline, char* output, size_t outpu
 	{
 		count++;
 		waitResult = win32Api.WaitForSingleObject(process_INFORMATION.hThread, 1000);
-	} while (waitResult == WAIT_TIMEOUT && count < 60);
+	} while (waitResult == WAIT_TIMEOUT && count < 5);
 	write2File(hFile, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
 	DWORD exitCode;
 	win32Api.GetExitCodeThread(process_INFORMATION.hThread, &exitCode);
@@ -442,128 +448,97 @@ int executeText(HANDLE accessToken, WCHAR* szCmdline, char* output, size_t outpu
 	win32Api.CloseHandle(g_hChildStd_OUT_Wr);
 	win32Api.CloseHandle(g_hChildStd_IN_Rd);
 	
-	DWORD dwRead, dwWritten; 
-	ZeroMemory(output, outputSize);
-	BOOL bSuccess = FALSE;
-	write2File(hFile, L"Start reading output\n");
-	for (;;) 
-	{ 
-	  bSuccess = win32Api.ReadFile(g_hChildStd_OUT_Rd, output, outputSize, &dwRead, NULL);
-	  if( ! bSuccess || dwRead == 0 ) break; 
-	  write2File(hFile, L"dwRead=%d\n",dwRead);
-
-	  write2File(hFile, L"%hs", output);
-	  
-	} 
-	write2File(hFile, L"Stop reading output\n");
-	win32Api.CloseHandle(g_hChildStd_OUT_Rd);
-	win32Api.CloseHandle(g_hChildStd_IN_Wr);
-		
-	return 0;
-}
-
-int executeJson(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket)
-{
-	SECURITY_ATTRIBUTES saAttr; 
-	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
-	saAttr.bInheritHandle = TRUE; 
-	saAttr.lpSecurityDescriptor = NULL; 
-	// Create a pipe for the child process's STDOUT. 
-	if (!win32Api.CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 0))
-	{
-		write2File(hFile, L"StdoutRd CreatePipe %d\n", GetLastError());
-		return 1;
-	}
-	// Ensure the read handle to the pipe for STDOUT is not inherited.
-	if (!win32Api.SetHandleInformation(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0))
-	{
-		write2File(hFile, L"Stdout SetHandleInformation %d\n", GetLastError());
-		return 1;
-	}
-	// Create a pipe for the child process's STDIN. 
-	if (!win32Api.CreatePipe(&g_hChildStd_IN_Rd, &g_hChildStd_IN_Wr, &saAttr, 0)) 
-	{
-		write2File(hFile, L"Stdin CreatePipe %d\n", GetLastError());
-		return 1;
-	}
-	// Ensure the write handle to the pipe for STDIN is not inherited. 
-	if (!win32Api.SetHandleInformation(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0))
-	{
-		write2File(hFile, L"Stdin SetHandleInformation %d\n", GetLastError());
-		return 1;
-	}
-
-	write2File(hFile, L"g_hChildStd_OUT_Rd=0x%08X\n", g_hChildStd_OUT_Rd);
-	write2File(hFile, L"g_hChildStd_OUT_Wr=0x%08X\n", g_hChildStd_OUT_Wr);
-	write2File(hFile, L"g_hChildStd_IN_Rd=0x%08X\n", g_hChildStd_IN_Rd);
-	write2File(hFile, L"g_hChildStd_IN_Wr=0x%08X\n", g_hChildStd_IN_Wr);
-
-	PROCESS_INFORMATION process_INFORMATION = {};
-	ZeroMemory(&process_INFORMATION, sizeof(PROCESS_INFORMATION));
-	STARTUPINFOW startupinfo = {};
-	ZeroMemory(&startupinfo, sizeof(STARTUPINFOW));
-	startupinfo.cb = sizeof(STARTUPINFOW); 
-	startupinfo.hStdError = g_hChildStd_OUT_Wr;
-	startupinfo.hStdOutput = g_hChildStd_OUT_Wr;
-	startupinfo.hStdInput = g_hChildStd_IN_Rd;
-	startupinfo.dwFlags |= STARTF_USESTDHANDLES;
-	
-	if(!win32Api.CreateProcessAsUserW(accessToken, NULL, szCmdline, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS | CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE, NULL, NULL, &startupinfo, &process_INFORMATION))
-	{
-		write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
-	}
-	write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
-	write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
-	
-	if (!win32Api.CloseHandle(g_hChildStd_IN_Wr))
-	{
-		write2File(hFile, L"StdInWr CloseHandle %d\n", GetLastError());
-		return 1;
-	}
-		
-	DWORD count = 0;
-	DWORD waitResult = 0;
-	do
-	{
-		count++;
-		waitResult = win32Api.WaitForSingleObject(process_INFORMATION.hThread, 1000);
-	} while (waitResult == WAIT_TIMEOUT && count < 60);
-	write2File(hFile, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
-	DWORD exitCode;
-	win32Api.GetExitCodeThread(process_INFORMATION.hThread, &exitCode);
-	write2File(hFile, L"Thread exit code: %d (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE);
-	win32Api.GetExitCodeProcess(process_INFORMATION.hProcess, &exitCode);
-	write2File(hFile, L"Process exit code: %x (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE); // 0xc0000135 = missing dll // 0xc0000005 = memory access violation
-
-	win32Api.CloseHandle(process_INFORMATION.hProcess);
-	win32Api.CloseHandle(process_INFORMATION.hThread);
-	
-	win32Api.CloseHandle(g_hChildStd_OUT_Wr);
-	win32Api.CloseHandle(g_hChildStd_IN_Rd);
-	
+	int byteSent;
 	char *header = "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n";
-	int byteSent = send(socket, header, strlen(header), 0);
+	byteSent = send(socket, header, strlen(header), 0);
 	if (byteSent == SOCKET_ERROR) {
 		write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
 	}
 	
-	DWORD dwRead, dwWritten; 
-	char output[100];
-	ZeroMemory(output, sizeof(output));
+	char *beginJson = "{\"output\":[";
+	byteSent = send(socket, beginJson, strlen(beginJson), 0);
+	if (byteSent == SOCKET_ERROR) {
+		write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+	}
+
+	char output[1];
+	DWORD dwRead; 
 	BOOL bSuccess = FALSE;
 	write2File(hFile, L"Start reading output\n");
+	BOOL start = true;
+	BOOL end = false;
+	char *cBeginEndLine = "\"";
+	char *cMidLine = "\",\"";
 	for (;;) 
 	{ 
-	  bSuccess = win32Api.ReadFile(g_hChildStd_OUT_Rd, output, sizeof(output), &dwRead, NULL);
-	  if( ! bSuccess || dwRead == 0 ) break; 
-	  write2File(hFile, L"dwRead=%d\n",dwRead);
+		bSuccess = win32Api.ReadFile(g_hChildStd_OUT_Rd, output, 1, &dwRead, NULL);
+		write2File(hFile, L"dwRead=%d;",dwRead);  
+		if( ! bSuccess || dwRead == 0 ) 
+		{
+			if (!start && !jsonResult) 
+			{
+				byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
+				if (byteSent == SOCKET_ERROR) {
+					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				}				
+			}
+			break; 
+		}
 
-	  send(socket, output, dwRead, 0);	  
+		if (!jsonResult)
+		{
+			if (end) 
+			{
+				byteSent = send(socket, cMidLine, strlen(cMidLine), 0);
+				if (byteSent == SOCKET_ERROR) {
+					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				}	
+				end = false;
+			}
+		  
+			if (start)
+			{
+				byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
+				if (byteSent == SOCKET_ERROR) {
+					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				}
+				start=false;
+			}
+
+			if (output[0] == '\n')
+			{
+				end = true;
+			}
+			else if (output[0] != '\r')
+			{
+				byteSent = send(socket, output, 1, 0);
+				if (byteSent == SOCKET_ERROR) {
+					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				}
+			}
+		}
+		else
+		{
+			byteSent = send(socket, output, 1, 0);
+			if (byteSent == SOCKET_ERROR) {
+				write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			}
+		}
 	} 
+	
 	write2File(hFile, L"Stop reading output\n");
 	win32Api.CloseHandle(g_hChildStd_OUT_Rd);
 	win32Api.CloseHandle(g_hChildStd_IN_Wr);
-		
+
+	if (!jsonResult)
+	{
+		char *endJson = "]}";
+		byteSent = send(socket, endJson, strlen(endJson), 0);
+		if (byteSent == SOCKET_ERROR) {
+			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		}
+	}
+	
 	return 0;
 }
 
@@ -610,43 +585,46 @@ void sendFile(SOCKET socket, char* path)
 	if (file == INVALID_HANDLE_VALUE)
 	{
 		write2File(hFile, L"CreateFileW error %d\n", GetLastError());
-		char sendbuff[1024];
-		ZeroMemory(sendbuff, sizeof(sendbuff));
-		strcpy_s(sendbuff, 1024, "HTTP/1.1 404 FILE NOT FOUND\nConnection: Closed\n\n");
-		int size = strlen(sendbuff);
-		int byteSent = send(socket, sendbuff, size, 0);
+		char *header = "HTTP/1.1 404 FILE NOT FOUND\nConnection: Closed\n\n";
+		int byteSent = send(socket, header, strlen(header), 0);
 		if (byteSent == SOCKET_ERROR) {
 			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
 		}
 	}
 	else
 	{
-		char sendbuff[100000];
-		ZeroMemory(sendbuff, sizeof(sendbuff));
-		DWORD offset = 0;
-		strcpy_s(sendbuff, sizeof(sendbuff), "HTTP/1.1 200 OK\nContent-type: application/octet-stream\nContent-Disposition: attachment; filename=\"");
-		offset += 98;
-		strcpy_s(sendbuff+offset, sizeof(sendbuff)-offset, fileName);
-		offset += strlen(fileName);
-		strcpy_s(sendbuff+offset, sizeof(sendbuff)-offset, "\"\nConnection: Closed\n\n");
-		offset += 22;
-		write2File(hFile, L"1 sendbuff=%hs\n", sendbuff);
-		write2File(hFile, L"file=0x%08X\n", file);	
-		write2File(hFile, L"offset=%d\n", offset);	
+		int byteSent;
+		char *beginHeader = "HTTP/1.1 200 OK\nContent-type: application/octet-stream\nContent-Disposition: attachment; filename=\"";
+		byteSent = send(socket, beginHeader, strlen(beginHeader), 0);
+		if (byteSent == SOCKET_ERROR) {
+			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		}
+		byteSent = send(socket, fileName, strlen(fileName), 0);
+		if (byteSent == SOCKET_ERROR) {
+			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		}
+		char *endHeader = "\"\nConnection: Closed\n\n";
+		byteSent = send(socket, endHeader, strlen(endHeader), 0);
+		if (byteSent == SOCKET_ERROR) {
+			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		}		
 		
+		char buffer[100];
 		DWORD dwRead; 
-		if(win32Api.ReadFile(file, sendbuff+offset, sizeof(sendbuff)-offset, &dwRead, NULL))
+		BOOL bSuccess = FALSE;
+		for(;;)
 		{
-			write2File(hFile, L"dwRead=%d\n", dwRead);	
-			
-			int byteSent = send(socket, sendbuff, offset+dwRead, 0);
+			bSuccess = win32Api.ReadFile(file, buffer, sizeof(buffer), &dwRead, NULL);
+			if( ! bSuccess || dwRead == 0 ) 
+			{
+				write2File(hFile, L"ReadFile read %d byte or failed with error: %d\n", dwRead, WSAGetLastError());
+				break; 
+			}
+			byteSent = send(socket, buffer, dwRead, 0);
 			if (byteSent == SOCKET_ERROR) {
 				write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				break;
 			}
-		}
-		else
-		{
-			write2File(hFile, L"ReadFile failed with error: %d\n", GetLastError());
 		}
 	}
 }
@@ -826,49 +804,27 @@ int waitConnection(SOCKET ListeningSocket)
 							mbstowcs_s(&convertedChars, commandWChar, strlen(command->valuestring)+1, command->valuestring, 1024);
 							write2File(hFile, L"commandWChar=%s\n", commandWChar);
 							
-							char *resultType = "TEXT";
+							RESULT_TYPE resultType = ResultTypeText;
 							const cJSON *resultTypeJson = cJSON_GetObjectItemCaseSensitive(messageBodyJson, "resultType");
 							if (cJSON_IsString(resultTypeJson) && (resultTypeJson->valuestring != NULL))
 							{
 								if (win32Api.lstrcmpA("JSON", resultTypeJson->valuestring) == 0)
 								{
-									resultType = "JSON";
+									resultType = ResultTypeJson;
 								}
 							}
 							
 							HANDLE systemToken = getSystemToken();
 							
-							if (win32Api.lstrcmpA("TEXT", resultType) == 0)
+							switch(resultType)
 							{
-								char output[100000];
-								executeText(systemToken, commandWChar, output, 100000);
-								write2File(hFile, L"output:\n[begin]\n%hs\n[end]\n", output);
-								cJSON *responseJson = cJSON_CreateObject();
-								cJSON *outputsArray = cJSON_AddArrayToObject(responseJson, "output");
-								char *string = output;
-								for (int i=0; i<10000; i++)
-								{
-									if (output[i] == '\r')
-									{
-										output[i] = ' ';
-									}
-									if (output[i] == '\n')
-									{
-										output[i] = '\0';
-										write2File(hFile, L"line=\"%hs\"\n", string);
-										cJSON *stringJson = cJSON_CreateString(string);
-										cJSON_AddItemToArray(outputsArray, stringJson);
-										string = output+i+1;
-									}
-								}
-								char *response = cJSON_PrintUnformatted(responseJson);
-								sendResponse(NewConnection, response);
-								free(response);
+							case ResultTypeText:
+								execute(systemToken, commandWChar, NewConnection, false);
+								break;
+							case ResultTypeJson:
+								execute(systemToken, commandWChar, NewConnection, true);
+								break;								
 							} 
-							else if (win32Api.lstrcmpA("JSON", resultType) == 0)
-							{
-								executeJson(systemToken, commandWChar, NewConnection);
-							}
 						}
 						else
 						{
@@ -881,7 +837,6 @@ int waitConnection(SOCKET ListeningSocket)
 					{
 						strtok(queryParam, "="); // init strtok
 						char *path = strtok(NULL, "="); // find second token
-						// see https://learn.microsoft.com/en-us/windows/win32/fileio/opening-a-file-for-reading-or-writing
 						sendFile(NewConnection, path);				
 					}
 

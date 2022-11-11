@@ -30,8 +30,10 @@ void addWString2Json(cJSON *json, char* name, WCHAR *wValue)
 {
 	size_t size = wcslen(wValue);
 	char *cValue = (char*)malloc(size+1);
+	//char cValue[1024];
 	size_t convertedChars;
 	wcstombs_s(&convertedChars, cValue, size+1, wValue, size);
+	//wcstombs_s(&convertedChars, cValue, 1024, wValue, 1023);
 	cJSON_AddStringToObject(json, name, cValue);
 	free(cValue);
 }
