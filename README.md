@@ -13,12 +13,17 @@ Returns HTTP 200 and `{"status":"OK"}` when the service is running.
 - Execute a program
 ```
 POST http://\<phone IP address\>:7171/execute
-body: {"command":"\<path to an executable file and its parameters\>"}
+body: 
+{
+  "command":"<path to an executable file and its parameters>",
+  (optional)"resultType":"(default)TEXT|JSON"
+}
 ```
 The program is executed by user system with high integrity and all privileges enabled.  
 This action waits the end of the execution before returning.  
 And the response contains the console output of the executed program.  
-Example of usage: `{"command":"C:\windows\system32\WPR.EXE -status"}`
+Example of usage: `{"command":"C:\windows\system32\WPR.EXE -status"}`  
+By default the result of the exe is assumed to be of type TEXT, but if the result is already of type JSON you can add the optional property `resultType=JSON`.
 - Download a file
 ```
 GET http://\<phone IP address\>:7171/download?path=\<path to a file\>
