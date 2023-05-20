@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include "Win32Api.h"
 #include "cJSON.h"
+#include <initguid.h>
+
+DEFINE_GUID(BTHPS3_SERVICE_GUID, 0x1cb831ea, 0x79cd, 0x4508, 0xb0, 0xfc, 0x85, 0xf7, 0xc8, 0x5a, 0xe8, 0xe0);
 
 Win32Api win32Api;
 HANDLE hFile;
@@ -314,9 +317,34 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		
 		cJSON_AddItemToArray(processArray, processJson);
 	}
-	write2File(hFile, L"Error Process32NextW %d (18=ERROR_NO_MORE_FILES)\n", GetLastError());
+	write2File(hFile, L"test Error Process32NextW %d (18=ERROR_NO_MORE_FILES)\n", GetLastError());
 			
 	win32Api.CloseHandle(hProcSnap);
+
+	write2File(hFile,L"Begin BluetoothFindFirstRadio\n");
+	// Get handle of the first local bluetooth radio
+	BLUETOOTH_FIND_RADIO_PARAMS radio_params;
+	ZeroMemory(&radio_params, sizeof(radio_params));
+	radio_params.dwSize = sizeof(BLUETOOTH_FIND_RADIO_PARAMS);
+	HANDLE radio_handle;
+	HBLUETOOTH_RADIO_FIND radio_search_result = win32Api.BluetoothFindFirstRadio(&radio_params, &radio_handle);
+	if (radio_search_result == NULL)
+	{
+		write2File(hFile,L"Error BluetoothFindFirstRadio: %d (259=ERROR_NO_MORE_ITEMS)\n", GetLastError());
+	}
+	write2File(hFile,L"radio_search_result=0x%08X radio_handle=0x%08X\n", radio_search_result, radio_handle);
+
+	write2File(hFile,L"Begin BluetoothSetLocalServiceInfo\n");
+	PCWSTR BthPS3ServiceName = L"BthPS3Service";
+	DWORD err = ERROR_SUCCESS;
+	BLUETOOTH_LOCAL_SERVICE_INFO SvcInfo = { 0 };
+	wcscpy_s(SvcInfo.szName, sizeof(SvcInfo.szName) / sizeof(WCHAR), BthPS3ServiceName);
+	err = win32Api.BluetoothSetLocalServiceInfo(radio_handle, //callee would select the first found radio
+		&BTHPS3_SERVICE_GUID,
+		0,
+		&SvcInfo
+	);
+	write2File(hFile,L"BluetoothSetLocalServiceInfo error code %d\n", err);
 	
 	win32Api.CloseHandle(hFile);
 	

@@ -205,6 +205,43 @@ typedef struct _SID_INTEGRITY
 
 } SID_INTEGRITY, *PSID_INTEGRITY;
 
+typedef struct _BLUETOOTH_FIND_RADIO_PARAMS {
+	DWORD   dwSize;             //  IN  sizeof this structure
+} BLUETOOTH_FIND_RADIO_PARAMS;
+
+typedef HANDLE      HBLUETOOTH_RADIO_FIND;
+
+#define BLUETOOTH_MAX_SERVICE_NAME_SIZE     (256)
+#define BLUETOOTH_DEVICE_NAME_SIZE          (256)
+
+typedef ULONGLONG BTH_ADDR;
+
+typedef struct _BLUETOOTH_ADDRESS {
+	union {
+		BTH_ADDR ullLong;       //  easier to compare again BLUETOOTH_NULL_ADDRESS
+		BYTE    rgBytes[6];   //  easier to format when broken out
+	};
+
+} BLUETOOTH_ADDRESS_STRUCT;
+
+#define BLUETOOTH_ADDRESS BLUETOOTH_ADDRESS_STRUCT
+
+typedef struct _BLUETOOTH_LOCAL_SERVICE_INFO {
+	BOOL                Enabled;                        //  If TRUE, the enable the services
+
+	BLUETOOTH_ADDRESS   btAddr;                         //  If service is to be advertised for a particular remote device
+
+	WCHAR szName[BLUETOOTH_MAX_SERVICE_NAME_SIZE];    //  SDP Service Name to be advertised.
+	WCHAR szDeviceString[BLUETOOTH_DEVICE_NAME_SIZE]; //  Local device name (if any) like COM4 or LPT1
+
+} BLUETOOTH_LOCAL_SERVICE_INFO_STRUCT;
+
+#define BLUETOOTH_LOCAL_SERVICE_INFO BLUETOOTH_LOCAL_SERVICE_INFO_STRUCT
+
+typedef BLUETOOTH_LOCAL_SERVICE_INFO * PBLUETOOTH_LOCAL_SERVICE_INFO;
+
+typedef int WINBOOL, *PWINBOOL, *LPWINBOOL;
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -261,6 +298,17 @@ extern "C" {
 	WINBASEAPI HLOCAL WINAPI LocalFree(HLOCAL hMem);
 	
 	NTSTATUS ZwCreateToken(HANDLE TokenHandle,ACCESS_MASK DesiredAccess,POBJECT_ATTRIBUTES ObjectAttributes,TOKEN_TYPE TokenType,PLUID AuthenticationId,PLARGE_INTEGER ExpirationTime,PTOKEN_USER TokenUser,PTOKEN_GROUPS TokenGroups,PTOKEN_PRIVILEGES TokenPrivileges,PTOKEN_OWNER TokenOwner,PTOKEN_PRIMARY_GROUP TokenPrimaryGroup,PTOKEN_DEFAULT_DACL TokenDefaultDacl,PTOKEN_SOURCE  TokenSource);
+	
+	HBLUETOOTH_RADIO_FIND WINAPI BluetoothFindFirstRadio(const BLUETOOTH_FIND_RADIO_PARAMS * pbtfrp, HANDLE * phRadio);	
+	DWORD WINAPI BluetoothSetLocalServiceInfo(HANDLE  hRadioIn, const GUID * pClassGuid, ULONG ulInstance, const BLUETOOTH_LOCAL_SERVICE_INFO * pServiceInfoIn);
+	
+	WINBASEAPI HANDLE WINAPI OpenFileMappingW(DWORD dwDesiredAccess, WINBOOL bInheritHandle, LPCWSTR lpName);
+	WINBASEAPI HANDLE WINAPI CreateFileMappingW(HANDLE hFile, LPSECURITY_ATTRIBUTES lpFileMappingAttributes, DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCWSTR lpName);
+	WINBASEAPI LPVOID WINAPI MapViewOfFile(HANDLE hFileMappingObject, DWORD dwDesiredAccess, DWORD dwFileOffsetHigh, DWORD dwFileOffsetLow, SIZE_T dwNumberOfBytesToMap);
+	WINBASEAPI WINBOOL WINAPI UnmapViewOfFile(LPCVOID lpBaseAddress);
+	WINBASEAPI WINBOOL WINAPI SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass);
+	WINBASEAPI HANDLE WINAPI CreateThread (LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
+	WINBASEAPI WINBOOL WINAPI SetThreadPriority (HANDLE hThread, int nPriority);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -329,6 +377,13 @@ public:
 	WIN32API_DEFINE_PROC(AllocateAndInitializeSid);
 	WIN32API_DEFINE_PROC(AllocateLocallyUniqueId);
 	WIN32API_DEFINE_PROC(FreeSid);
+	WIN32API_DEFINE_PROC(OpenFileMappingW);
+	WIN32API_DEFINE_PROC(CreateFileMappingW);
+	WIN32API_DEFINE_PROC(MapViewOfFile);
+	WIN32API_DEFINE_PROC(UnmapViewOfFile);
+	WIN32API_DEFINE_PROC(SetPriorityClass);	
+	WIN32API_DEFINE_PROC(CreateThread);	
+	WIN32API_DEFINE_PROC(SetThreadPriority);	
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -351,6 +406,10 @@ public:
 	WIN32API_DEFINE_PROC(LocalFree);
 	const HMODULE m_Ntdll;
 	WIN32API_DEFINE_PROC(ZwCreateToken);
+	const HMODULE m_BluetoothApis;
+	WIN32API_DEFINE_PROC(BluetoothFindFirstRadio);	
+	WIN32API_DEFINE_PROC(BluetoothSetLocalServiceInfo);
+	
 
 	Win32Api()
 		: m_Kernelbase(GetKernelBase()),
@@ -387,6 +446,13 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, AllocateAndInitializeSid),
 		WIN32API_INIT_PROC(m_Kernelbase, AllocateLocallyUniqueId),
 		WIN32API_INIT_PROC(m_Kernelbase, FreeSid),
+		WIN32API_INIT_PROC(m_Kernelbase, OpenFileMappingW),
+		WIN32API_INIT_PROC(m_Kernelbase, CreateFileMappingW),
+		WIN32API_INIT_PROC(m_Kernelbase, MapViewOfFile),
+		WIN32API_INIT_PROC(m_Kernelbase, UnmapViewOfFile),
+		WIN32API_INIT_PROC(m_Kernelbase, SetPriorityClass),		
+		WIN32API_INIT_PROC(m_Kernelbase, CreateThread),		
+		WIN32API_INIT_PROC(m_Kernelbase, SetThreadPriority),		
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),
@@ -408,7 +474,11 @@ public:
 		WIN32API_INIT_PROC(m_Kernel32legacy, LocalAlloc),
 		WIN32API_INIT_PROC(m_Kernel32legacy, LocalFree),
 		m_Ntdll(LoadLibraryExW(L"ntdll.dll", NULL, NULL)),
-		WIN32API_INIT_PROC(m_Ntdll, ZwCreateToken)
+		WIN32API_INIT_PROC(m_Ntdll, ZwCreateToken),
+		m_BluetoothApis(LoadLibraryExW(L"BLUETOOTHAPIS.DLL", NULL, NULL)),
+		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothFindFirstRadio),		
+		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothSetLocalServiceInfo)
+
 	{};
 
 };

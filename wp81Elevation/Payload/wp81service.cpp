@@ -17,6 +17,7 @@
 #include <winsock2.h>
 #include "Win32Api.h"
 #include "cJSON.h"
+#include <atlbase.h>
 
 
 typedef enum  {
@@ -35,6 +36,25 @@ HANDLE g_hChildStd_IN_Rd = NULL;
 HANDLE g_hChildStd_IN_Wr = NULL;
 HANDLE g_hChildStd_OUT_Rd = NULL;
 HANDLE g_hChildStd_OUT_Wr = NULL;
+
+enum {
+	TIMEOUT_WIN_DEBUG = 100,
+};
+
+struct dbwin_buffer
+{
+	DWORD   dwProcessId;
+	char    data[4096 - sizeof(DWORD)];
+};
+
+HANDLE m_hDBWinMutex;
+HANDLE m_hDBMonBuffer;
+HANDLE m_hEventBufferReady;
+HANDLE m_hEventDataReady;
+
+HANDLE m_hWinDebugMonitorThread;
+BOOL m_bWinDebugMonStopped;
+struct dbwin_buffer *m_pDBBuffer;
 
 void write2File(HANDLE hFile, WCHAR* format, ...)
 {
@@ -59,6 +79,186 @@ void write2File(HANDLE hFile, WCHAR* format, ...)
 
 	va_end(args);
 }
+
+DWORD MonitorProcess()
+{
+	DWORD ret = 0;
+
+	//write2File(hFile,L"MonitorProcess: wait for data ready\n");
+	// wait for data ready
+	ret = win32Api.WaitForSingleObject(m_hEventDataReady, TIMEOUT_WIN_DEBUG);
+
+	//write2File(hFile,L"MonitorProcess ret=%d 0=WAIT_OBJECT_0 258=WAIT_TIMEOUT\n", ret);
+
+	if (ret == WAIT_OBJECT_0) {
+		WCHAR dataWChar[4096];
+		size_t convertedChars;
+		mbstowcs_s(&convertedChars, dataWChar, strlen(m_pDBBuffer->data)+1, m_pDBBuffer->data, 4096);
+		write2File(hFile, L"%d %s", m_pDBBuffer->dwProcessId, dataWChar);
+
+		// signal buffer ready
+		SetEvent(m_hEventBufferReady);
+	}
+
+	return ret;
+}
+
+DWORD WINAPI MonitorThread(void *pData)
+{
+	write2File(hFile,L"Begin MonitorThread.\n");
+	
+	while (!m_bWinDebugMonStopped) {
+		MonitorProcess();
+	}
+
+	write2File(hFile,L"End MonitorThread.\n");
+
+	return 0;
+}
+
+DWORD InitializeMonitor()
+{
+	write2File(hFile,L"Begin InitializeMonitor.\n");
+	
+	DWORD errorCode = 0;
+	BOOL bSuccessful = FALSE;
+
+	SetLastError(0);
+
+	// Mutex: DBWin
+	// ---------------------------------------------------------
+	CComBSTR DBWinMutex = L"DBWinMutex";
+	m_hDBWinMutex = OpenMutex(
+		MUTEX_ALL_ACCESS,
+		FALSE,
+		DBWinMutex
+	);
+
+	if (m_hDBWinMutex == NULL) {
+		errorCode = GetLastError();
+		return errorCode;
+	}
+
+	// Event: buffer ready
+	// ---------------------------------------------------------
+	CComBSTR DBWIN_BUFFER_READY = L"DBWIN_BUFFER_READY";
+	m_hEventBufferReady = OpenEvent(
+		EVENT_ALL_ACCESS,
+		FALSE,
+		DBWIN_BUFFER_READY
+	);
+
+	if (m_hEventBufferReady == NULL) {
+		m_hEventBufferReady = win32Api.CreateEventW(
+			NULL,
+			FALSE,	// auto-reset
+			TRUE,	// initial state: signaled
+			DBWIN_BUFFER_READY
+		);
+
+		if (m_hEventBufferReady == NULL) {
+			errorCode = GetLastError();
+			return errorCode;
+		}
+	}
+
+	// Event: data ready
+	// ---------------------------------------------------------
+	CComBSTR DBWIN_DATA_READY = L"DBWIN_DATA_READY";
+	m_hEventDataReady = OpenEvent(
+		SYNCHRONIZE,
+		FALSE,
+		DBWIN_DATA_READY
+	);
+
+	if (m_hEventDataReady == NULL) {
+		m_hEventDataReady = win32Api.CreateEventW(
+			NULL,
+			FALSE,	// auto-reset
+			FALSE,	// initial state: nonsignaled
+			DBWIN_DATA_READY
+		);
+
+		if (m_hEventDataReady == NULL) {
+			errorCode = GetLastError();
+			return errorCode;
+		}
+	}
+
+	// Shared memory
+	// ---------------------------------------------------------
+	CComBSTR DBWIN_BUFFER = L"DBWIN_BUFFER";
+	m_hDBMonBuffer = win32Api.OpenFileMappingW(
+		FILE_MAP_READ,
+		FALSE,
+		DBWIN_BUFFER
+	);
+
+	if (m_hDBMonBuffer == NULL) {
+		m_hDBMonBuffer = win32Api.CreateFileMappingW(
+			INVALID_HANDLE_VALUE,
+			NULL,
+			PAGE_READWRITE,
+			0,
+			sizeof(struct dbwin_buffer),
+			DBWIN_BUFFER
+		);
+
+		if (m_hDBMonBuffer == NULL) {
+			errorCode = GetLastError();
+			return errorCode;
+		}
+	}
+
+	m_pDBBuffer = (struct dbwin_buffer *)win32Api.MapViewOfFile(
+		m_hDBMonBuffer,
+		SECTION_MAP_READ,
+		0,
+		0,
+		0
+	);
+
+	if (m_pDBBuffer == NULL) {
+		errorCode = GetLastError();
+		return errorCode;
+	}
+
+	// Monitoring thread
+	// ---------------------------------------------------------
+	m_bWinDebugMonStopped = FALSE;
+
+	m_hWinDebugMonitorThread = win32Api.CreateThread(
+		NULL,
+		0,
+		MonitorThread,
+		NULL,
+		0,
+		NULL
+	);
+
+	if (m_hWinDebugMonitorThread == NULL) {
+		m_bWinDebugMonStopped = TRUE;
+		errorCode = GetLastError();
+		return errorCode;
+	}
+
+	// set monitor thread's priority to highest
+	// ---------------------------------------------------------
+	bSuccessful = win32Api.SetPriorityClass(
+		GetCurrentProcess(),
+		REALTIME_PRIORITY_CLASS
+	);
+
+	bSuccessful = win32Api.SetThreadPriority(
+		m_hWinDebugMonitorThread,
+		THREAD_PRIORITY_TIME_CRITICAL
+	);
+
+	write2File(hFile,L"End InitializeMonitor.\n");
+
+	return errorCode;
+}
+
 
 void get_system_privileges(PTOKEN_PRIVILEGES privileges)
 {
@@ -924,6 +1124,10 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	/* Here initialize service...
 	Load configuration, acquire resources etc. */
 	ReportStatus(SERVICE_RUNNING);
+
+	if (InitializeMonitor() != 0) {
+		write2File(hFile, L"InitializeMonitor failed.\n");
+	}
 
 	WSADATA            wsaData;
 	SOCKET             ListeningSocket;
