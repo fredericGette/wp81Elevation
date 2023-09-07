@@ -37,7 +37,11 @@ Could be useful to update the .exe of the service.
 
 ## Miscellaneous
 
-The service writes all its logs into `C:\Data\USERS\Public\Documents\wp81service.log`. This file is overriden when the service starts.
+The service writes all its logs into `C:\Data\USERS\Public\Documents\wp81service.log`. 
+
+The service also writes OutputDebugString information coming from other processes into this log file: `C:\Data\USERS\Public\Documents\wp81service_debug.log`
+
+All log files are overriden when the service starts.
 
 In order to authorize a .exe to be executed by user `system`, the .exe must be added to the value `Executables` of the key `SOFTWARE\Microsoft\SecurityManager\PrincipalClasses\PRINCIPAL_CLASS_TCB` of the registry hive `HKEY_LOCAL_MACHINE`.
 
