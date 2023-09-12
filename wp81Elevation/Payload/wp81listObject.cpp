@@ -54,7 +54,8 @@ int PrintDirectoryObjects(WCHAR* directoryName)
                     // if(0 == wcsncmp((PWSTR)(pdilist[i].TypeName.Buffer), L"Device", pdilist[i].TypeName.Length / sizeof(WCHAR)))
                     // {
 						log2File(hLogFile,L"%s %s\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
-						//printf("%S %S\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
+						printf("%S %S\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
+						//printf("%S\n",pdilist[i].TypeName.Buffer);
                     // }
                 }
             }
@@ -95,11 +96,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 	log2File(hLogFile, L"Begin wp81listObject\n");
 	
-	printf("Hello World\n");
 	PrintDirectoryObjects(L"\\Device");
 	//PrintDirectoryObjects(L"\\Driver");
 	//PrintDirectoryObjects(L"\\GLOBAL\?\?");
-	printf("oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo\n");
 	
 	log2File(hLogFile, L"End wp81listObject\n");
 	

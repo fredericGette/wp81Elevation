@@ -309,6 +309,10 @@ extern "C" {
 	WINBASEAPI WINBOOL WINAPI SetPriorityClass(HANDLE hProcess, DWORD dwPriorityClass);
 	WINBASEAPI HANDLE WINAPI CreateThread (LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
 	WINBASEAPI WINBOOL WINAPI SetThreadPriority (HANDLE hThread, int nPriority);
+	
+	NTSTATUS WINAPI NtOpenDirectoryObject(PHANDLE DirectoryHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
+	NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE DirectoryHandle, PVOID Buffer, ULONG Length, BOOLEAN ReturnSingleEntry, BOOLEAN RestartScan, PULONG Context, PULONG ReturnLength);
+	void RtlInitUnicodeString(PUNICODE_STRING DestinationString, PCWSTR SourceString);
 }
 
 #define WIN32API_TOSTRING(x) #x
@@ -320,6 +324,39 @@ extern "C" {
 
 // Convenientmacro to declare function
 #define WIN32API_DEFINE_PROC(Name) const decltype(&::Name) Name
+
+#ifndef InitializeObjectAttributes
+#define InitializeObjectAttributes( p, n, a, r, s ) { \
+    (p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
+    (p)->RootDirectory = r;                             \
+    (p)->Attributes = a;                                \
+    (p)->ObjectName = n;                                \
+    (p)->SecurityDescriptor = s;                        \
+    (p)->SecurityQualityOfService = NULL;               \
+    }
+#endif
+
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#endif
+
+#define DIRECTORY_QUERY                 (0x0001)
+#define DIRECTORY_TRAVERSE              (0x0002)
+
+typedef struct _OBJECT_DIRECTORY_INFORMATION {
+    UNICODE_STRING Name;
+    UNICODE_STRING TypeName;
+} OBJECT_DIRECTORY_INFORMATION, *POBJECT_DIRECTORY_INFORMATION;
+
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS                   ((NTSTATUS)0x00000000L) // ntsubauth
+#endif // STATUS_SUCCESS
+#ifndef STATUS_MORE_ENTRIES
+#define STATUS_MORE_ENTRIES              ((NTSTATUS)0x00000105L)
+#endif // STATUS_MORE_ENTRIES
+#ifndef STATUS_NO_MORE_ENTRIES
+#define STATUS_NO_MORE_ENTRIES           ((NTSTATUS)0x8000001AL)
+#endif // STATUS_NO_MORE_ENTRIES
 
 class Win32Api {
 
@@ -406,6 +443,9 @@ public:
 	WIN32API_DEFINE_PROC(LocalFree);
 	const HMODULE m_Ntdll;
 	WIN32API_DEFINE_PROC(ZwCreateToken);
+	WIN32API_DEFINE_PROC(NtOpenDirectoryObject);
+	WIN32API_DEFINE_PROC(NtQueryDirectoryObject);
+	WIN32API_DEFINE_PROC(RtlInitUnicodeString);
 	const HMODULE m_BluetoothApis;
 	WIN32API_DEFINE_PROC(BluetoothFindFirstRadio);	
 	WIN32API_DEFINE_PROC(BluetoothSetLocalServiceInfo);
@@ -475,6 +515,9 @@ public:
 		WIN32API_INIT_PROC(m_Kernel32legacy, LocalFree),
 		m_Ntdll(LoadLibraryExW(L"ntdll.dll", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Ntdll, ZwCreateToken),
+		WIN32API_INIT_PROC(m_Ntdll, NtOpenDirectoryObject),
+		WIN32API_INIT_PROC(m_Ntdll, NtQueryDirectoryObject),
+		WIN32API_INIT_PROC(m_Ntdll, RtlInitUnicodeString),
 		m_BluetoothApis(LoadLibraryExW(L"BLUETOOTHAPIS.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothFindFirstRadio),		
 		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothSetLocalServiceInfo)

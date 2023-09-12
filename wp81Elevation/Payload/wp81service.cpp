@@ -30,7 +30,8 @@ SERVICE_STATUS_HANDLE g_ServiceStatusHandle;
 HANDLE g_StopEvent;
 DWORD g_CurrentState = 0;
 bool g_SystemShutdown = false;
-HANDLE hFile;
+HANDLE hMainLog;
+HANDLE hDebugLog;
 
 HANDLE g_hChildStd_IN_Rd = NULL;
 HANDLE g_hChildStd_IN_Wr = NULL;
@@ -56,7 +57,7 @@ HANDLE m_hWinDebugMonitorThread;
 BOOL m_bWinDebugMonStopped;
 struct dbwin_buffer *m_pDBBuffer;
 
-void write2File(HANDLE hFile, WCHAR* format, ...)
+void log2File(HANDLE hLogFile, WCHAR* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -67,34 +68,43 @@ void write2File(HANDLE hFile, WCHAR* format, ...)
 	DWORD dwBytesToWrite = wcslen(buffer) * sizeof(WCHAR);
 	DWORD dwBytesWritten = 0;
 	win32Api.WriteFile(
-		hFile,           // open file handle
+		hLogFile,           // open file handle
 		buffer,      // start of data to write
 		dwBytesToWrite,  // number of bytes to write
 		&dwBytesWritten, // number of bytes that were written
 		NULL);            // no overlapped structure
 	if (size == -1)
 	{
-		win32Api.WriteFile(hFile, L"<truncate>", 20, &dwBytesWritten, NULL);
+		win32Api.WriteFile(hLogFile, L"<truncate>", 20, &dwBytesWritten, NULL);
 	}		
 
 	va_end(args);
 }
 
+// https://www.codeproject.com/Articles/23776/Mechanism-of-OutputDebugString
 DWORD MonitorProcess()
 {
 	DWORD ret = 0;
 
-	//write2File(hFile,L"MonitorProcess: wait for data ready\n");
+	//log2File(hMainLog,L"MonitorProcess: wait for data ready\n");
 	// wait for data ready
 	ret = win32Api.WaitForSingleObject(m_hEventDataReady, TIMEOUT_WIN_DEBUG);
 
-	//write2File(hFile,L"MonitorProcess ret=%d 0=WAIT_OBJECT_0 258=WAIT_TIMEOUT\n", ret);
+	//log2File(hMainLog,L"MonitorProcess ret=%d 0=WAIT_OBJECT_0 258=WAIT_TIMEOUT\n", ret);
 
 	if (ret == WAIT_OBJECT_0) {
+		
+		FILETIME fileTime;
+		GetSystemTimeAsFileTime(&fileTime);
+		ULARGE_INTEGER theTime;
+		theTime.LowPart = fileTime.dwLowDateTime;
+		theTime.HighPart = fileTime.dwHighDateTime;
+		__int64 fileTime64Bit = theTime.QuadPart;
+		
 		WCHAR dataWChar[4096];
 		size_t convertedChars;
 		mbstowcs_s(&convertedChars, dataWChar, strlen(m_pDBBuffer->data)+1, m_pDBBuffer->data, 4096);
-		write2File(hFile, L"%d %s", m_pDBBuffer->dwProcessId, dataWChar);
+		log2File(hDebugLog, L"[%I64u] %d %s", fileTime64Bit, m_pDBBuffer->dwProcessId, dataWChar);
 
 		// signal buffer ready
 		SetEvent(m_hEventBufferReady);
@@ -105,20 +115,20 @@ DWORD MonitorProcess()
 
 DWORD WINAPI MonitorThread(void *pData)
 {
-	write2File(hFile,L"Begin MonitorThread.\n");
+	log2File(hMainLog,L"Begin MonitorThread.\n");
 	
 	while (!m_bWinDebugMonStopped) {
 		MonitorProcess();
 	}
 
-	write2File(hFile,L"End MonitorThread.\n");
+	log2File(hMainLog,L"End MonitorThread.\n");
 
 	return 0;
 }
 
 DWORD InitializeMonitor()
 {
-	write2File(hFile,L"Begin InitializeMonitor.\n");
+	log2File(hMainLog,L"Begin InitializeMonitor.\n");
 	
 	DWORD errorCode = 0;
 	BOOL bSuccessful = FALSE;
@@ -254,7 +264,7 @@ DWORD InitializeMonitor()
 		THREAD_PRIORITY_TIME_CRITICAL
 	);
 
-	write2File(hFile,L"End InitializeMonitor.\n");
+	log2File(hMainLog,L"End InitializeMonitor.\n");
 
 	return errorCode;
 }
@@ -463,7 +473,7 @@ HANDLE se_create_token_privilege(HANDLE base_token, BOOL isPrimary)
 	SID_INTEGRITY IntegritySIDMedium = { 1, 1, SECURITY_MANDATORY_LABEL_AUTHORITY, SECURITY_MANDATORY_MEDIUM_RID };
 
 	if (win32Api.ZwCreateToken == NULL){
-		write2File(hFile,L"[-] Failed to load ZwCreateToken: %d\n", GetLastError());
+		log2File(hMainLog,L"[-] Failed to load ZwCreateToken: %d\n", GetLastError());
 		return NULL;
 	}
 
@@ -535,7 +545,7 @@ HANDLE se_create_token_privilege(HANDLE base_token, BOOL isPrimary)
 	if (ntStatus == STATUS_SUCCESS)
 		return elevated_token;
 	else
-		write2File(hFile,L"[-] Failed to create new token: %d %08x\n", GetLastError(), ntStatus);
+		log2File(hMainLog,L"[-] Failed to create new token: %d %08x\n", GetLastError(), ntStatus);
 
 	win32Api.FreeSid(lpSidOwner);
 	if (stats) win32Api.LocalFree(stats);
@@ -549,21 +559,21 @@ HANDLE getSystemToken()
 	HANDLE createdToken = NULL;
 	
 	HANDLE hCurrentProcess = GetCurrentProcess();
-	write2File(hFile, L"hCurrentProcess=0x%08X\n", hCurrentProcess);
+	log2File(hMainLog, L"hCurrentProcess=0x%08X\n", hCurrentProcess);
 	
 	HANDLE hCurrentProcessToken = NULL;
 	if (win32Api.OpenProcessToken(hCurrentProcess, TOKEN_ALL_ACCESS, &hCurrentProcessToken))
 	{
-		write2File(hFile, L"************ hCurrentProcessToken=0x%08X\n", hCurrentProcessToken);
+		log2File(hMainLog, L"************ hCurrentProcessToken=0x%08X\n", hCurrentProcessToken);
 			
 		//https://github.com/hatRiot/token-priv/blob/master/poptoke/poptoke/SeCreateTokenPrivilege.cpp
-		write2File(hFile, L"se_create_token_privilege....\n");
+		log2File(hMainLog, L"se_create_token_privilege....\n");
 		createdToken = se_create_token_privilege(hCurrentProcessToken, TRUE);
-		write2File(hFile, L"************ createdToken=0x%08X\n", createdToken);
+		log2File(hMainLog, L"************ createdToken=0x%08X\n", createdToken);
 	}
 	else
 	{
-		write2File(hFile, L"Error OpenProcessToken %d\n", GetLastError());
+		log2File(hMainLog, L"Error OpenProcessToken %d\n", GetLastError());
 	}
 
 	return createdToken;
@@ -578,32 +588,32 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 	// Create a pipe for the child process's STDOUT. 
 	if (!win32Api.CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 0))
 	{
-		write2File(hFile, L"StdoutRd CreatePipe %d\n", GetLastError());
+		log2File(hMainLog, L"StdoutRd CreatePipe %d\n", GetLastError());
 		return 1;
 	}
 	// Ensure the read handle to the pipe for STDOUT is not inherited.
 	if (!win32Api.SetHandleInformation(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0))
 	{
-		write2File(hFile, L"Stdout SetHandleInformation %d\n", GetLastError());
+		log2File(hMainLog, L"Stdout SetHandleInformation %d\n", GetLastError());
 		return 1;
 	}
 	// Create a pipe for the child process's STDIN. 
 	if (!win32Api.CreatePipe(&g_hChildStd_IN_Rd, &g_hChildStd_IN_Wr, &saAttr, 0)) 
 	{
-		write2File(hFile, L"Stdin CreatePipe %d\n", GetLastError());
+		log2File(hMainLog, L"Stdin CreatePipe %d\n", GetLastError());
 		return 1;
 	}
 	// Ensure the write handle to the pipe for STDIN is not inherited. 
 	if (!win32Api.SetHandleInformation(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0))
 	{
-		write2File(hFile, L"Stdin SetHandleInformation %d\n", GetLastError());
+		log2File(hMainLog, L"Stdin SetHandleInformation %d\n", GetLastError());
 		return 1;
 	}
 
-	write2File(hFile, L"g_hChildStd_OUT_Rd=0x%08X\n", g_hChildStd_OUT_Rd);
-	write2File(hFile, L"g_hChildStd_OUT_Wr=0x%08X\n", g_hChildStd_OUT_Wr);
-	write2File(hFile, L"g_hChildStd_IN_Rd=0x%08X\n", g_hChildStd_IN_Rd);
-	write2File(hFile, L"g_hChildStd_IN_Wr=0x%08X\n", g_hChildStd_IN_Wr);
+	log2File(hMainLog, L"g_hChildStd_OUT_Rd=0x%08X\n", g_hChildStd_OUT_Rd);
+	log2File(hMainLog, L"g_hChildStd_OUT_Wr=0x%08X\n", g_hChildStd_OUT_Wr);
+	log2File(hMainLog, L"g_hChildStd_IN_Rd=0x%08X\n", g_hChildStd_IN_Rd);
+	log2File(hMainLog, L"g_hChildStd_IN_Wr=0x%08X\n", g_hChildStd_IN_Wr);
 
 	PROCESS_INFORMATION process_INFORMATION = {};
 	ZeroMemory(&process_INFORMATION, sizeof(PROCESS_INFORMATION));
@@ -617,14 +627,14 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 	
 	if(!win32Api.CreateProcessAsUserW(accessToken, NULL, szCmdline, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS | CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE, NULL, NULL, &startupinfo, &process_INFORMATION))
 	{
-		write2File(hFile, L"Error CreateProcessAsUserW %d\n", GetLastError());
+		log2File(hMainLog, L"Error CreateProcessAsUserW %d\n", GetLastError());
 	}
-	write2File(hFile, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
-	write2File(hFile, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
+	log2File(hMainLog, L"process_INFORMATION.hProcess=0x%08X\n", process_INFORMATION.hProcess);
+	log2File(hMainLog, L"process_INFORMATION.hThread=0x%08X\n", process_INFORMATION.hThread);
 	
 	if (!win32Api.CloseHandle(g_hChildStd_IN_Wr))
 	{
-		write2File(hFile, L"StdInWr CloseHandle %d\n", GetLastError());
+		log2File(hMainLog, L"StdInWr CloseHandle %d\n", GetLastError());
 		return 1;
 	}
 		
@@ -635,12 +645,12 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 		count++;
 		waitResult = win32Api.WaitForSingleObject(process_INFORMATION.hThread, 1000);
 	} while (waitResult == WAIT_TIMEOUT && count < 5);
-	write2File(hFile, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
+	log2File(hMainLog, L"%05d WaitForSingleObject %d (%d=WAIT_TIMEOUT)\n", count, waitResult, WAIT_TIMEOUT);
 	DWORD exitCode;
 	win32Api.GetExitCodeThread(process_INFORMATION.hThread, &exitCode);
-	write2File(hFile, L"Thread exit code: %d (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE);
+	log2File(hMainLog, L"Thread exit code: %d (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE);
 	win32Api.GetExitCodeProcess(process_INFORMATION.hProcess, &exitCode);
-	write2File(hFile, L"Process exit code: %x (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE); // 0xc0000135 = missing dll // 0xc0000005 = memory access violation
+	log2File(hMainLog, L"Process exit code: %x (%d=STILL_ACTIVE)\n", exitCode, STILL_ACTIVE); // 0xc0000135 = missing dll // 0xc0000005 = memory access violation
 
 	win32Api.CloseHandle(process_INFORMATION.hProcess);
 	win32Api.CloseHandle(process_INFORMATION.hThread);
@@ -652,35 +662,41 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 	char *header = "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n";
 	byteSent = send(socket, header, strlen(header), 0);
 	if (byteSent == SOCKET_ERROR) {
-		write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 	}
 	
 	char *beginJson = "{\"output\":[";
 	byteSent = send(socket, beginJson, strlen(beginJson), 0);
 	if (byteSent == SOCKET_ERROR) {
-		write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 	}
 
 	char output[1];
 	DWORD dwRead; 
 	BOOL bSuccess = FALSE;
-	write2File(hFile, L"Start reading output\n");
+	log2File(hMainLog, L"Start reading output\n");
 	BOOL start = true;
 	BOOL end = false;
 	char *cBeginEndLine = "\"";
 	char *cMidLine = "\",\"";
+	char response[20000];
+	ZeroMemory(response, 20000);
+	
+	DWORD idx=0;
 	for (;;) 
 	{ 
 		bSuccess = win32Api.ReadFile(g_hChildStd_OUT_Rd, output, 1, &dwRead, NULL);
-		write2File(hFile, L"dwRead=%d;",dwRead);  
+		log2File(hMainLog, L"dwRead=%d %d;",dwRead, output[0]);  
 		if( ! bSuccess || dwRead == 0 ) 
 		{
 			if (!start && !jsonResult) 
 			{
-				byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
-				if (byteSent == SOCKET_ERROR) {
-					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
-				}				
+				strcpy(response+idx, cBeginEndLine);
+				idx += strlen(cBeginEndLine);
+				// byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
+				// if (byteSent == SOCKET_ERROR) {
+					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
+				// }				
 			}
 			break; 
 		}
@@ -689,19 +705,23 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 		{
 			if (end) 
 			{
-				byteSent = send(socket, cMidLine, strlen(cMidLine), 0);
-				if (byteSent == SOCKET_ERROR) {
-					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
-				}	
+				strcpy(response+idx, cMidLine);
+				idx += strlen(cMidLine);
+				// byteSent = send(socket, cMidLine, strlen(cMidLine), 0);
+				// if (byteSent == SOCKET_ERROR) {
+					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
+				// }	
 				end = false;
 			}
 		  
 			if (start)
 			{
-				byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
-				if (byteSent == SOCKET_ERROR) {
-					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
-				}
+				strcpy(response+idx, cBeginEndLine);
+				idx += strlen(cBeginEndLine);
+				// byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
+				// if (byteSent == SOCKET_ERROR) {
+					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
+				// }
 				start=false;
 			}
 
@@ -711,33 +731,44 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 			}
 			else if (output[0] != '\r')
 			{
-				byteSent = send(socket, output, 1, 0);
-				if (byteSent == SOCKET_ERROR) {
-					write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
-				}
+				response[idx] = output[0];
+				idx++;
+
+				// byteSent = send(socket, output, 1, 0);
+				// log2File(hMainLog, L"send %d", byteSent);
+				// if (byteSent == SOCKET_ERROR) {
+					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
+				// }
 			}
 		}
 		else
 		{
 			byteSent = send(socket, output, 1, 0);
 			if (byteSent == SOCKET_ERROR) {
-				write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 			}
 		}
 	} 
 	
-	write2File(hFile, L"Stop reading output\n");
+	log2File(hMainLog, L"Stop reading output\n");
 	win32Api.CloseHandle(g_hChildStd_OUT_Rd);
 	win32Api.CloseHandle(g_hChildStd_IN_Wr);
 
 	if (!jsonResult)
 	{
 		char *endJson = "]}";
-		byteSent = send(socket, endJson, strlen(endJson), 0);
-		if (byteSent == SOCKET_ERROR) {
-			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
-		}
+		strcpy(response+idx, endJson);
+		idx += strlen(endJson);
+		// byteSent = send(socket, endJson, strlen(endJson), 0);
+		// if (byteSent == SOCKET_ERROR) {
+			// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
+		// }
 	}
+	
+	byteSent = send(socket, response, strlen(response), 0);
+	if (byteSent == SOCKET_ERROR) {
+		log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
+	}	
 	
 	return 0;
 }
@@ -747,13 +778,13 @@ void sendResponse(SOCKET socket, char* response)
 	char *header = "HTTP/1.1 200 OK\nContent-type: application/json\nConnection: Closed\n\n";
 	int byteSent = send(socket, header, strlen(header), 0);
 	if (byteSent == SOCKET_ERROR) {
-		write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+		log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 	}
 	if (response != NULL)
 	{
 		byteSent = send(socket, response, strlen(response), 0);
 		if (byteSent == SOCKET_ERROR) {
-			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 		}
 	}
 }
@@ -772,7 +803,7 @@ void sendFile(SOCKET socket, char* path)
 	WCHAR pathWChar[1024];
 	size_t convertedChars;
 	mbstowcs_s(&convertedChars, pathWChar, strlen(path)+1, path, 1024);
-	write2File(hFile, L"Download file \"%s\"\n", pathWChar);
+	log2File(hMainLog, L"Download file \"%s\"\n", pathWChar);
 
 	HANDLE file = win32Api.CreateFileW(pathWChar,               // file to open
                        GENERIC_READ,          // open for reading
@@ -784,11 +815,11 @@ void sendFile(SOCKET socket, char* path)
 
 	if (file == INVALID_HANDLE_VALUE)
 	{
-		write2File(hFile, L"CreateFileW error %d\n", GetLastError());
+		log2File(hMainLog, L"CreateFileW error %d\n", GetLastError());
 		char *header = "HTTP/1.1 404 FILE NOT FOUND\nConnection: Closed\n\n";
 		int byteSent = send(socket, header, strlen(header), 0);
 		if (byteSent == SOCKET_ERROR) {
-			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 		}
 	}
 	else
@@ -797,16 +828,16 @@ void sendFile(SOCKET socket, char* path)
 		char *beginHeader = "HTTP/1.1 200 OK\nContent-type: application/octet-stream\nContent-Disposition: attachment; filename=\"";
 		byteSent = send(socket, beginHeader, strlen(beginHeader), 0);
 		if (byteSent == SOCKET_ERROR) {
-			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 		}
 		byteSent = send(socket, fileName, strlen(fileName), 0);
 		if (byteSent == SOCKET_ERROR) {
-			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 		}
 		char *endHeader = "\"\nConnection: Closed\n\n";
 		byteSent = send(socket, endHeader, strlen(endHeader), 0);
 		if (byteSent == SOCKET_ERROR) {
-			write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+			log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 		}		
 		
 		char buffer[100];
@@ -817,12 +848,12 @@ void sendFile(SOCKET socket, char* path)
 			bSuccess = win32Api.ReadFile(file, buffer, sizeof(buffer), &dwRead, NULL);
 			if( ! bSuccess || dwRead == 0 ) 
 			{
-				write2File(hFile, L"ReadFile read %d byte or failed with error: %d\n", dwRead, WSAGetLastError());
+				log2File(hMainLog, L"ReadFile read %d byte or failed with error: %d\n", dwRead, WSAGetLastError());
 				break; 
 			}
 			byteSent = send(socket, buffer, dwRead, 0);
 			if (byteSent == SOCKET_ERROR) {
-				write2File(hFile, L"send failed with error: %d\n", WSAGetLastError());
+				log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
 				break;
 			}
 		}
@@ -857,7 +888,7 @@ int waitConnection(SOCKET ListeningSocket)
 	char recvbuff[1024];
 	int ByteReceived, i, nlen, SelectTiming;
 	
-	write2File(hFile, L"Server: listen() during 10s...\n");
+	log2File(hMainLog, L"Server: listen() during 10s...\n");
 	// Set 10 seconds 10 useconds timeout
 	SelectTiming = recvTimeOutTCP(ListeningSocket, 10, 10);
 
@@ -865,12 +896,12 @@ int waitConnection(SOCKET ListeningSocket)
 	{
 	case 0:
 		// Timed out, do whatever you want to handle this situation
-		write2File(hFile, L"\nServer: Timeout while waiting you retard client!...\n");
+		log2File(hMainLog, L"\nServer: Timeout while waiting you retard client!...\n");
 		break;
 
 	case -1:
 		// Error occurred, more tweaking here and the recvTimeOutTCP()...
-		write2File(hFile, L"\nServer: Some error encountered with code number : %ld\n", WSAGetLastError());
+		log2File(hMainLog, L"\nServer: Some error encountered with code number : %ld\n", WSAGetLastError());
 		break;
 
 	default:
@@ -878,7 +909,7 @@ int waitConnection(SOCKET ListeningSocket)
 		// Accept a new connection when available. 'while' always true
 		//while (1)
 		//{
-			write2File(hFile, L"Server: connexion...\n");
+			log2File(hMainLog, L"Server: connexion...\n");
 			// Reset the NewConnection socket to SOCKET_ERROR
 			// Take note that the NewConnection socket in not listening
 			NewConnection = SOCKET_ERROR;
@@ -890,8 +921,8 @@ int waitConnection(SOCKET ListeningSocket)
 				// it to the NewConnection socket, let the ListeningSocket
 				// do the listening for more connection
 				NewConnection = accept(ListeningSocket, NULL, NULL);
-				write2File(hFile, L"\nServer: accept() is OK...\n");
-				write2File(hFile, L"Server: New client got connected, ready to	receive and send data...\n");
+				log2File(hMainLog, L"\nServer: accept() is OK...\n");
+				log2File(hMainLog, L"Server: New client got connected, ready to	receive and send data...\n");
 
 				// At this point you can do two things with these sockets
 				// 1. Wait for more connections by calling accept again
@@ -903,11 +934,11 @@ int waitConnection(SOCKET ListeningSocket)
 				// When there is data
 				if (ByteReceived > 0)
 				{
-					write2File(hFile, L"Server: recv() looks fine....\n");
+					log2File(hMainLog, L"Server: recv() looks fine....\n");
 					// Some info on the receiver side...
 					//getsockname(ListeningSocket, (SOCKADDR *)&ServerAddr, (int *)sizeof(ServerAddr));
-					//write2File(hFile, L"Server: Receiving IP(s) used : %s\n", inet_ntoa(ServerAddr.sin_addr));
-					//write2File(hFile, L"Server: Receiving port used : %d\n", htons(ServerAddr.sin_port));
+					//log2File(hMainLog, L"Server: Receiving IP(s) used : %s\n", inet_ntoa(ServerAddr.sin_addr));
+					//log2File(hMainLog, L"Server: Receiving port used : %d\n", htons(ServerAddr.sin_port));
 
 					// Some info on the sender side
 					// Allocate the required resources
@@ -915,14 +946,14 @@ int waitConnection(SOCKET ListeningSocket)
 					nlen = sizeof(SenderInfo);
 
 					getpeername(NewConnection, (SOCKADDR *)&SenderInfo, &nlen);
-					write2File(hFile, L"Server: Sending IP used : %hs\n", inet_ntoa(SenderInfo.sin_addr));
-					write2File(hFile, L"Server: Sending port used : %d\n", htons(SenderInfo.sin_port));
+					log2File(hMainLog, L"Server: Sending IP used : %hs\n", inet_ntoa(SenderInfo.sin_addr));
+					log2File(hMainLog, L"Server: Sending port used : %d\n", htons(SenderInfo.sin_port));
 
 					// Print the received bytes. Take note that this is the total
 					// byte received, it is not the size of the declared buffer
-					write2File(hFile, L"Server: Bytes received : %d\n", ByteReceived);
+					log2File(hMainLog, L"Server: Bytes received : %d\n", ByteReceived);
 					// Print what those bytes represent
-					write2File(hFile, L"Server: Those bytes are : \n");
+					log2File(hMainLog, L"Server: Those bytes are : \n");
 					// Print the string only, discard other
 					// remaining 'rubbish' in the 1024 buffer size
 					char *requestMethod = recvbuff;
@@ -933,7 +964,7 @@ int waitConnection(SOCKET ListeningSocket)
 					int nbCRLF = 0;
 					for (i = 0; i < ByteReceived; i++)
 					{
-						write2File(hFile, L"%c", recvbuff[i]);
+						log2File(hMainLog, L"%c", recvbuff[i]);
 						if (recvbuff[i] == ' ' && nbParsedField < 2)
 						{
 							recvbuff[i] = '\0';
@@ -961,15 +992,15 @@ int waitConnection(SOCKET ListeningSocket)
 							messageBody = recvbuff+i+1;
 						}
 					}
-					write2File(hFile, L"\n");
-					write2File(hFile, L"Request Method: %hs\n", requestMethod);
-					write2File(hFile, L"Request URL: %hs\n", requestUrl);
-					write2File(hFile, L"Query Param: %hs\n", queryParam == NULL ? "":queryParam);
-					write2File(hFile, L"Message Body: %hs\n", messageBody == NULL ? "":messageBody);
+					log2File(hMainLog, L"\n");
+					log2File(hMainLog, L"Request Method: %hs\n", requestMethod);
+					log2File(hMainLog, L"Request URL: %hs\n", requestUrl);
+					log2File(hMainLog, L"Query Param: %hs\n", queryParam == NULL ? "":queryParam);
+					log2File(hMainLog, L"Message Body: %hs\n", messageBody == NULL ? "":messageBody);
 					
 					if (win32Api.lstrcmpA("GET", requestMethod) == 0 && win32Api.lstrcmpA("/status", requestUrl) == 0)
 					{	
-						write2File(hFile, L"STATUS OK\n");
+						log2File(hMainLog, L"STATUS OK\n");
 						cJSON *responseJson = cJSON_CreateObject();
 						cJSON_AddStringToObject(responseJson, "status", "OK");
 						char *response = cJSON_PrintUnformatted(responseJson);
@@ -978,13 +1009,13 @@ int waitConnection(SOCKET ListeningSocket)
 					} 
 					else if (win32Api.lstrcmpA("/stopService", requestUrl) == 0)
 					{	
-						write2File(hFile, L"Stopping service...\n");
+						log2File(hMainLog, L"Stopping service...\n");
 						SetEvent(g_StopEvent);
 						sendResponse(NewConnection, NULL);
 					}
 					else if (win32Api.lstrcmpA("POST", requestMethod) == 0 && win32Api.lstrcmpA("/execute", requestUrl) == 0)
 					{	
-						write2File(hFile, L"Execute...\n");
+						log2File(hMainLog, L"Execute...\n");
 						const cJSON *command = NULL;
 						cJSON *messageBodyJson = cJSON_Parse(messageBody);
 						if (messageBodyJson == NULL)
@@ -992,17 +1023,17 @@ int waitConnection(SOCKET ListeningSocket)
 							const char *error = cJSON_GetErrorPtr();
 							if (error != NULL)
 							{
-								write2File(hFile, L"Error before: %hs\n", error);
+								log2File(hMainLog, L"Error before: %hs\n", error);
 							}
 						}
 						command = cJSON_GetObjectItemCaseSensitive(messageBodyJson, "command");
 						if (cJSON_IsString(command) && (command->valuestring != NULL))
 						{
-							write2File(hFile, L"command=%hs\n", command->valuestring);
+							log2File(hMainLog, L"command=%hs\n", command->valuestring);
 							WCHAR commandWChar[1024];
 							size_t convertedChars;
 							mbstowcs_s(&convertedChars, commandWChar, strlen(command->valuestring)+1, command->valuestring, 1024);
-							write2File(hFile, L"commandWChar=%s\n", commandWChar);
+							log2File(hMainLog, L"commandWChar=%s\n", commandWChar);
 							
 							RESULT_TYPE resultType = ResultTypeText;
 							const cJSON *resultTypeJson = cJSON_GetObjectItemCaseSensitive(messageBodyJson, "resultType");
@@ -1043,21 +1074,21 @@ int waitConnection(SOCKET ListeningSocket)
 				}
 				// No data
 				else if (ByteReceived == 0)
-					write2File(hFile, L"Server: Connection closed!\n");
+					log2File(hMainLog, L"Server: Connection closed!\n");
 				// Others
 				else
-					write2File(hFile, L"Server: recv() failed with error code : %d\n", WSAGetLastError());
+					log2File(hMainLog, L"Server: recv() failed with error code : %d\n", WSAGetLastError());
 			}
 
 			// Clean up all the send/recv communication, get ready for new one
 			if (shutdown(NewConnection, SD_SEND) != 0)
-				write2File(hFile, L"\nServer: Well, there is something wrong with the shutdown().The error code : %ld\n", WSAGetLastError());
+				log2File(hMainLog, L"\nServer: Well, there is something wrong with the shutdown().The error code : %ld\n", WSAGetLastError());
 			else
-				write2File(hFile, L"\nServer: shutdown() looks OK...\n");
+				log2File(hMainLog, L"\nServer: shutdown() looks OK...\n");
 
 			// Well, if there is no more connection in 5 seconds,
 			// just exit this listening loop...
-			//write2File(hFile, L"Server: listen() during 5s...\n");
+			//log2File(hMainLog, L"Server: listen() during 5s...\n");
 			//if (recvTimeOutTCP(ListeningSocket, 5, 0) == 0)
 			//	break;
 		//}
@@ -1069,7 +1100,7 @@ int waitConnection(SOCKET ListeningSocket)
 
 void ReportStatus(DWORD state)
 {
-	write2File(hFile, L"Begin ReportStatus.\n");
+	log2File(hMainLog, L"Begin ReportStatus.\n");
 	
 	g_CurrentState = state;
 	SERVICE_STATUS serviceStatus = {
@@ -1083,12 +1114,12 @@ void ReportStatus(DWORD state)
 	};
 	win32Api.SetServiceStatus(g_ServiceStatusHandle, &serviceStatus);
 	
-	write2File(hFile, L"End ReportStatus.\n");
+	log2File(hMainLog, L"End ReportStatus.\n");
 }
 
 DWORD WINAPI HandlerEx(DWORD control, DWORD eventType, void *eventData, void *context)
 {
-	write2File(hFile, L"Begin HandlerEx.\n");
+	log2File(hMainLog, L"Begin HandlerEx.\n");
 	
 	switch (control)
 	{
@@ -1106,14 +1137,14 @@ DWORD WINAPI HandlerEx(DWORD control, DWORD eventType, void *eventData, void *co
 		ReportStatus(g_CurrentState);
 		break;
 	}
-	write2File(hFile, L"End HandlerEx.\n");
+	log2File(hMainLog, L"End HandlerEx.\n");
 	
 	return NO_ERROR;
 }
 
 void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 {
-	write2File(hFile, L"Begin ServiceMain wp81service.\n");
+	log2File(hMainLog, L"Begin ServiceMain wp81service.\n");
 	
 	// Must be called at start.
 	g_ServiceStatusHandle = win32Api.RegisterServiceCtrlHandlerExW(L"Service test", &HandlerEx, NULL);
@@ -1126,9 +1157,9 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	ReportStatus(SERVICE_RUNNING);
 
 	if (InitializeMonitor() != 0) {
-		write2File(hFile, L"InitializeMonitor failed.\n");
+		log2File(hMainLog, L"InitializeMonitor failed.\n");
 	}
-
+	
 	WSADATA            wsaData;
 	SOCKET             ListeningSocket;
 	SOCKADDR_IN        ServerAddr;
@@ -1139,24 +1170,24 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	{
 		// The WSAGetLastError() function is one of the only functions
 		// in the Winsock 2.2 DLL that can be called in the case of a WSAStartup failure
-		write2File(hFile, L"Server: WSAStartup failed with error %ld.\n", WSAGetLastError());
+		log2File(hMainLog, L"Server: WSAStartup failed with error %ld.\n", WSAGetLastError());
 	}
 	else
 	{
-		write2File(hFile, L"Server: The Winsock DLL found!\n");
-		write2File(hFile, L"Server: The current status is %hs.\n", wsaData.szSystemStatus);
+		log2File(hMainLog, L"Server: The Winsock DLL found!\n");
+		log2File(hMainLog, L"Server: The current status is %hs.\n", wsaData.szSystemStatus);
 		
 		if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
 		{
 			//Tell the user that we could not find a usable WinSock DLL
-			write2File(hFile, L"Server: The dll do not support the Winsock version %u.%u!\n",LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
+			log2File(hMainLog, L"Server: The dll do not support the Winsock version %u.%u!\n",LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
 			// Do the clean up
 			WSACleanup();
 		}
 		else
 		{
-			write2File(hFile, L"Server: The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
-			write2File(hFile, L"Server: The highest version this dll can support is %u.%u\n", LOBYTE(wsaData.wHighVersion), HIBYTE(wsaData.wHighVersion));
+			log2File(hMainLog, L"Server: The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
+			log2File(hMainLog, L"Server: The highest version this dll can support is %u.%u\n", LOBYTE(wsaData.wHighVersion), HIBYTE(wsaData.wHighVersion));
 			
 			// Create a new socket to listen for client connections.
 			ListeningSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -1164,13 +1195,13 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 			// Check for errors to ensure that the socket is a valid socket.
 			if (ListeningSocket == INVALID_SOCKET)
 			{
-				write2File(hFile, L"Server: Error at socket(), error code : %ld.\n", WSAGetLastError());
+				log2File(hMainLog, L"Server: Error at socket(), error code : %ld.\n", WSAGetLastError());
 				// Clean up
 				WSACleanup();
 			}
 			else
 			{
-				write2File(hFile, L"Server: socket() is OK!\n");
+				log2File(hMainLog, L"Server: socket() is OK!\n");
 				// Set up a SOCKADDR_IN structure that will tell bind that we
 				// want to listen for connections on all interfaces using port 7171.
 
@@ -1186,7 +1217,7 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 				// structure as parameters. Check for general errors.
 				if (bind(ListeningSocket, (SOCKADDR *)&ServerAddr, sizeof(ServerAddr)) == SOCKET_ERROR)
 				{
-					write2File(hFile, L"Server: bind() failed!Error code : %ld.\n", WSAGetLastError());
+					log2File(hMainLog, L"Server: bind() failed!Error code : %ld.\n", WSAGetLastError());
 					// Close the socket
 					closesocket(ListeningSocket);
 					// Do the clean up
@@ -1194,11 +1225,11 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 				}
 				else
 				{
-					write2File(hFile, L"Server: bind() is OK!\n");
+					log2File(hMainLog, L"Server: bind() is OK!\n");
 					// Listen for client connections with a backlog of 5
 					if (listen(ListeningSocket, 5) == SOCKET_ERROR)
 					{
-						write2File(hFile, L"Server: listen() : Error listening on socket %ld.\n", WSAGetLastError());
+						log2File(hMainLog, L"Server: listen() : Error listening on socket %ld.\n", WSAGetLastError());
 						// Close the socket
 						closesocket(ListeningSocket);
 						// Do the clean up
@@ -1206,7 +1237,7 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 					}
 					else
 					{
-						write2File(hFile, L"Server: listen() is OK, I'm listening for connections...\n");
+						log2File(hMainLog, L"Server: listen() is OK, I'm listening for connections...\n");
 
 						/* Main service code
 						Loop, do some work,
@@ -1218,18 +1249,18 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 							//test(TRUE);
 						}						
 						
-						write2File(hFile, L"\nServer: The listening socket is timeout...\n");
+						log2File(hMainLog, L"\nServer: The listening socket is timeout...\n");
 						// When all the data communication and listening finished, close the socket
 						if (closesocket(ListeningSocket) != 0)
-							write2File(hFile, L"Server: Cannot close ListeningSocket socket.Error code : %ld\n", WSAGetLastError());
+							log2File(hMainLog, L"Server: Cannot close ListeningSocket socket.Error code : %ld\n", WSAGetLastError());
 						else
-							write2File(hFile, L"Server: Closing ListeningSocket socket...\n");
+							log2File(hMainLog, L"Server: Closing ListeningSocket socket...\n");
 
 						// Finally and optionally, clean up all those WSA setup
 						if (WSACleanup() != 0)
-							write2File(hFile, L"Server: WSACleanup() failed!Error code : %ld\n", WSAGetLastError());
+							log2File(hMainLog, L"Server: WSACleanup() failed!Error code : %ld\n", WSAGetLastError());
 						else
-							write2File(hFile, L"Server: WSACleanup() is OK...\n");
+							log2File(hMainLog, L"Server: WSACleanup() is OK...\n");
 						
 					}
 				}
@@ -1244,24 +1275,39 @@ void WINAPI ServiceMain(DWORD argc, LPTSTR *argv)
 	win32Api.CloseHandle(g_StopEvent);
 	ReportStatus(SERVICE_STOPPED);
 	
-	write2File(hFile, L"End ServiceMain.\n");
+	log2File(hMainLog, L"End ServiceMain.\n");
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	hFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81service.log",                // name of the write
+	hMainLog = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81service.log",                // name of the write
 		GENERIC_WRITE,          // open for writing
 		FILE_SHARE_READ,        // share
 		NULL,                   // default security
 		CREATE_ALWAYS,          // always create new file 
 		FILE_ATTRIBUTE_NORMAL,  // normal file
 		NULL);                  // no attr. template
-	if (hFile == INVALID_HANDLE_VALUE)
+	if (hMainLog == INVALID_HANDLE_VALUE)
 	{
 		return 1;
 	}
+
+	hDebugLog = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81service_debug.log",
+		GENERIC_WRITE,
+		FILE_SHARE_READ,
+		NULL,
+		CREATE_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL);
+	if (hDebugLog == INVALID_HANDLE_VALUE)
+	{
+		log2File(hMainLog, L"Fqiled to create wp81service_debug.log file.\n");
+		win32Api.CloseHandle(hMainLog);
+		return 1;
+	}
+
 	
-	write2File(hFile, L"Begin wWinMain.\n");
+	log2File(hMainLog, L"Begin wWinMain.\n");
 	
 	SERVICE_TABLE_ENTRYW serviceTable[] = {
 		{ L"Service test", &ServiceMain },
@@ -1270,11 +1316,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 	if (win32Api.StartServiceCtrlDispatcherW(serviceTable))
 	{
-		write2File(hFile, L"Service ended.\n");
-		win32Api.CloseHandle(hFile);
+		log2File(hMainLog, L"Service ended.\n");
+		win32Api.CloseHandle(hDebugLog);
+		win32Api.CloseHandle(hMainLog);
 		return 0;
 	}
-	write2File(hFile, L"Error StartServiceCtrlDispatcherW : %d\n", GetLastError());
-	win32Api.CloseHandle(hFile);
+	log2File(hMainLog, L"Error StartServiceCtrlDispatcherW : %d\n", GetLastError());
+	win32Api.CloseHandle(hDebugLog);
+	win32Api.CloseHandle(hMainLog);
 	return 2;
 }
