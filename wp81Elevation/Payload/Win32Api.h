@@ -313,6 +313,7 @@ extern "C" {
 	NTSTATUS WINAPI NtOpenDirectoryObject(PHANDLE DirectoryHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
 	NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE DirectoryHandle, PVOID Buffer, ULONG Length, BOOLEAN ReturnSingleEntry, BOOLEAN RestartScan, PULONG Context, PULONG ReturnLength);
 	void RtlInitUnicodeString(PUNICODE_STRING DestinationString, PCWSTR SourceString);
+	
 }
 
 #define WIN32API_TOSTRING(x) #x

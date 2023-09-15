@@ -29,7 +29,7 @@ void log2File(HANDLE hFile, WCHAR* format, ...)
 int PrintDirectoryObjects(WCHAR* directoryName)
 {
 	log2File(hLogFile,L"Begin PrintDirectoryObjects\n");
-	log2File(hLogFile,L"%s\n",directoryName);
+	log2File(hLogFile,L"[%s]\n",directoryName);
     NTSTATUS ntStatus;
     OBJECT_ATTRIBUTES oa;
     UNICODE_STRING objname;
@@ -51,12 +51,8 @@ int PrintDirectoryObjects(WCHAR* directoryName)
                 POBJECT_DIRECTORY_INFORMATION const pdilist = reinterpret_cast<POBJECT_DIRECTORY_INFORMATION>(PBYTE(buf));
                 for(ULONG i = 0; i < idx - start; i++)
                 {
-                    // if(0 == wcsncmp((PWSTR)(pdilist[i].TypeName.Buffer), L"Device", pdilist[i].TypeName.Length / sizeof(WCHAR)))
-                    // {
-						log2File(hLogFile,L"%s %s\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
-						printf("%S %S\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
-						//printf("%S\n",pdilist[i].TypeName.Buffer);
-                    // }
+					log2File(hLogFile,L"%s %s\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
+					printf("%S %S\n", pdilist[i].TypeName.Buffer, pdilist[i].Name.Buffer);
                 }
             }
             if(STATUS_MORE_ENTRIES == ntStatus)
@@ -74,7 +70,7 @@ int PrintDirectoryObjects(WCHAR* directoryName)
 		log2File(hLogFile,L"End PrintDirectoryObjects\n");
         return 0;
     }
-    log2File(hLogFile,L"Failed NtOpenDirectoryObject with 0x%08X", ntStatus);
+    log2File(hLogFile,L"Failed NtOpenDirectoryObject with 0x%08X\n", ntStatus);
     return 1;
 }
 
@@ -96,7 +92,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 	log2File(hLogFile, L"Begin wp81listObject\n");
 	
-	PrintDirectoryObjects(L"\\Device");
+	size_t cmdLineSize = wcslen(pCmdLine);
+	printf("Command Line: %S (%d)\n", pCmdLine, cmdLineSize);
+	
+	if (cmdLineSize > 0)
+	{
+		PrintDirectoryObjects(pCmdLine);
+	}
+	else
+	{
+		printf("No parameter!\n");
+	}
+	
+	//PrintDirectoryObjects(L"\\Device");
 	//PrintDirectoryObjects(L"\\Driver");
 	//PrintDirectoryObjects(L"\\GLOBAL\?\?");
 	

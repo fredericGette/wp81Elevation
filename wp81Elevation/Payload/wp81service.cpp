@@ -5,6 +5,9 @@
 // curl -v http://192.168.1.28:7171/status
 // curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WPR.EXE -status\"}"
 // curl -v http://192.168.1.28:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTPROCESS.EXE\",\"resultType\":\"JSON\"}"
+// curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\Device\"}"
+// curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\Driver\"}"
+// curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\GLOBAL??\"}"
 // curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81service.log
 // curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81listProcess.log
 // curl -v http://192.168.1.28:7171/stopService
@@ -679,8 +682,8 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 	BOOL end = false;
 	char *cBeginEndLine = "\"";
 	char *cMidLine = "\",\"";
-	char response[20000];
-	ZeroMemory(response, 20000);
+	char response[100000];
+	ZeroMemory(response, 100000);
 	
 	DWORD idx=0;
 	for (;;) 
@@ -693,10 +696,6 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 			{
 				strcpy(response+idx, cBeginEndLine);
 				idx += strlen(cBeginEndLine);
-				// byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
-				// if (byteSent == SOCKET_ERROR) {
-					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
-				// }				
 			}
 			break; 
 		}
@@ -707,10 +706,6 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 			{
 				strcpy(response+idx, cMidLine);
 				idx += strlen(cMidLine);
-				// byteSent = send(socket, cMidLine, strlen(cMidLine), 0);
-				// if (byteSent == SOCKET_ERROR) {
-					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
-				// }	
 				end = false;
 			}
 		  
@@ -718,10 +713,6 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 			{
 				strcpy(response+idx, cBeginEndLine);
 				idx += strlen(cBeginEndLine);
-				// byteSent = send(socket, cBeginEndLine, strlen(cBeginEndLine), 0);
-				// if (byteSent == SOCKET_ERROR) {
-					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
-				// }
 				start=false;
 			}
 
@@ -733,20 +724,12 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 			{
 				response[idx] = output[0];
 				idx++;
-
-				// byteSent = send(socket, output, 1, 0);
-				// log2File(hMainLog, L"send %d", byteSent);
-				// if (byteSent == SOCKET_ERROR) {
-					// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
-				// }
 			}
 		}
 		else
 		{
-			byteSent = send(socket, output, 1, 0);
-			if (byteSent == SOCKET_ERROR) {
-				log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
-			}
+			response[idx] = output[0];
+			idx++;
 		}
 	} 
 	
@@ -759,10 +742,6 @@ int execute(HANDLE accessToken, WCHAR* szCmdline, SOCKET socket, BOOL jsonResult
 		char *endJson = "]}";
 		strcpy(response+idx, endJson);
 		idx += strlen(endJson);
-		// byteSent = send(socket, endJson, strlen(endJson), 0);
-		// if (byteSent == SOCKET_ERROR) {
-			// log2File(hMainLog, L"send failed with error: %d\n", WSAGetLastError());
-		// }
 	}
 	
 	byteSent = send(socket, response, strlen(response), 0);
