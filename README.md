@@ -7,12 +7,12 @@ Currently, only 4 actions are possible:
 
 - Get the status of the service
 ```
-GET http://\<phone IP address\>:7171/status
+GET http://<phone IP address>:7171/status
 ```
 Returns HTTP 200 and `{"status":"OK"}` when the service is running.
 - Execute a program
 ```
-POST http://\<phone IP address\>:7171/execute
+POST http://<phone IP address>:7171/execute
 body: 
 {
   "command":"<path to an executable file and its parameters>",
@@ -26,12 +26,12 @@ Example of usage: `{"command":"C:\windows\system32\WPR.EXE -status"}`
 By default the result of the exe is assumed to be of type TEXT, but if the result is already of type JSON you can add the optional property `resultType=JSON`.
 - Download a file
 ```
-GET http://\<phone IP address\>:7171/download?path=\<path to a file\>
+GET http://<phone IP address>:7171/download?path=<path to a file>
 ```
 Example of usage: `http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81service.log`
 - Stop the service
 ```
-GET or POST http://\<phone IP address\>:7171/stopService
+GET or POST http://<phone IP address>:7171/stopService
 ```
 Could be useful to update the .exe of the service.
 
@@ -48,6 +48,23 @@ In order to authorize a .exe to be executed by user `system`, the .exe must be a
 Compilation requires Visual Studio 2015 with Windows Phone 8.1 support.
 
 Execution requires a Windows Phone 8.1 rooted with [WPinternals](https://github.com/ReneLergner/WPinternals).
+
+## Included programs
+
+- WP81LISTPROCESS.EXE *\<no parameter\>*  
+List all the running processes with a list of their privileges.  
+The result is a JSON.
+
+- WP81LISTOBJECT.EXE *\<directory\>*  
+List the objects contained in a directory of the Object Manager.
+
+Examples of usages:  
+```
+curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\Device\"}"  
+curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\Driver\"}"  
+curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\GLOBAL??\"}"  
+```
+
 
 ## How to add a file into a .apx and build the package.
 
