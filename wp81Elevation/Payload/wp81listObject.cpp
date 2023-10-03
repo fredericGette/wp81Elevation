@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "Win32Api.h"
 
+#define ARRAY_SIZE 1024
+
 Win32Api win32Api;
 HANDLE hLogFile;
 
@@ -74,7 +76,145 @@ int PrintDirectoryObjects(WCHAR* directoryName)
     return 1;
 }
 
+VOID GetDevicePropertiesCfgmgr32(VOID)
+{
+    CONFIGRET cr = CR_SUCCESS;
+    PWSTR DeviceList = NULL;
+    ULONG DeviceListLength = 0;
+    PWSTR CurrentDevice;
+    DEVINST Devinst;
+    WCHAR DeviceDesc[2048];
+    DEVPROPTYPE PropertyType;
+    ULONG PropertySize;
+    DWORD Index = 0;
 
+    cr = win32Api.CM_Get_Device_ID_List_SizeW(&DeviceListLength,
+                                    NULL,
+                                    CM_GETIDLIST_FILTER_PRESENT);
+
+    if (cr != CR_SUCCESS)
+    {
+        goto Exit;
+    }
+
+    DeviceList = (PWSTR)HeapAlloc(GetProcessHeap(),
+                                  HEAP_ZERO_MEMORY,
+                                  DeviceListLength * sizeof(WCHAR));
+
+    if (DeviceList == NULL) {
+        goto Exit;
+    }
+
+    cr = win32Api.CM_Get_Device_ID_ListW(NULL,
+                               DeviceList,
+                               DeviceListLength,
+                               CM_GETIDLIST_FILTER_PRESENT);
+
+    if (cr != CR_SUCCESS)
+    {
+        goto Exit;
+    }
+
+    for (CurrentDevice = DeviceList;
+         *CurrentDevice;
+         CurrentDevice += wcslen(CurrentDevice) + 1)
+    {
+		log2File(hLogFile,L"%d Device: %s | ", Index, CurrentDevice);
+
+        // If the list of devices also includes non-present devices,
+        // CM_LOCATE_DEVNODE_PHANTOM should be used in place of
+        // CM_LOCATE_DEVNODE_NORMAL.
+        cr = win32Api.CM_Locate_DevNodeW(&Devinst,
+                               CurrentDevice,
+                               CM_LOCATE_DEVNODE_NORMAL);
+
+        if (cr != CR_SUCCESS)
+        {
+            goto Exit;
+        }
+
+        // Query a property on the device.  For example, the device description.
+        PropertySize = sizeof(DeviceDesc);
+        cr = win32Api.CM_Get_DevNode_PropertyW(Devinst, &DEVPKEY_Device_DeviceDesc, &PropertyType, (PBYTE)DeviceDesc, &PropertySize, 0);
+        if (cr == CR_SUCCESS && PropertyType == DEVPROP_TYPE_STRING)
+        {
+            log2File(hLogFile,L"DeviceDesc: %s | ", DeviceDesc);
+        }
+		
+		
+        PropertySize = sizeof(DeviceDesc);
+        cr = win32Api.CM_Get_DevNode_PropertyW(Devinst, &DEVPKEY_Device_Driver, &PropertyType, (PBYTE)DeviceDesc, &PropertySize, 0);
+		if (cr == CR_SUCCESS && PropertyType == DEVPROP_TYPE_STRING)
+        {
+            log2File(hLogFile,L"Driver: %s | ", DeviceDesc);
+        }
+
+        PropertySize = sizeof(DeviceDesc);
+        cr = win32Api.CM_Get_DevNode_PropertyW(Devinst, &DEVPKEY_Device_PDOName, &PropertyType, (PBYTE)DeviceDesc, &PropertySize, 0);
+		if (cr == CR_SUCCESS && PropertyType == DEVPROP_TYPE_STRING)
+        {
+            log2File(hLogFile,L"PDOName: %s | ", DeviceDesc);
+        }
+
+        PropertySize = sizeof(DeviceDesc);
+        cr = win32Api.CM_Get_DevNode_PropertyW(Devinst, &DEVPKEY_Device_EnumeratorName, &PropertyType, (PBYTE)DeviceDesc, &PropertySize, 0);
+		if (cr == CR_SUCCESS && PropertyType == DEVPROP_TYPE_STRING)
+        {
+            log2File(hLogFile,L"EnumeratorName: %s | ", DeviceDesc);
+        }
+
+        PropertySize = sizeof(DeviceDesc);
+        cr = win32Api.CM_Get_DevNode_PropertyW(Devinst, &DEVPKEY_Device_Parent, &PropertyType, (PBYTE)DeviceDesc, &PropertySize, 0);
+		if (cr == CR_SUCCESS && PropertyType == DEVPROP_TYPE_STRING)
+        {
+            log2File(hLogFile,L"Parent: %s | ", DeviceDesc);
+        }
+
+		log2File(hLogFile,L"\n");
+
+		
+        Index++;
+    }
+
+  Exit:
+
+    if (DeviceList != NULL)
+    {
+        HeapFree(GetProcessHeap(),
+                 0,
+                 DeviceList);
+    }
+
+    return;
+}
+
+void listDeviceDrivers()
+{
+	LPVOID drivers[ARRAY_SIZE];
+	DWORD cbNeeded;
+	int cDrivers, i;
+
+	if (win32Api.EnumDeviceDrivers(drivers, sizeof(drivers), &cbNeeded) && cbNeeded < sizeof(drivers))
+	{
+		TCHAR szDriver[ARRAY_SIZE];
+
+		cDrivers = cbNeeded / sizeof(drivers[0]);
+
+		log2File(hLogFile,L"There are %d drivers:\n", cDrivers);
+		for (i = 0; i < cDrivers; i++)
+		{
+			if (win32Api.GetDeviceDriverBaseNameW(drivers[i], szDriver, sizeof(szDriver) / sizeof(szDriver[0])))
+			{
+				log2File(hLogFile,L"%d: %s\n", i + 1, szDriver);
+			}
+		}
+	}
+	else
+	{
+		log2File(hLogFile,L"EnumDeviceDrivers error: %d\n", GetLastError());
+		log2File(hLogFile,L"EnumDeviceDrivers failed; array size needed is %d\n", cbNeeded / sizeof(LPVOID));
+	}
+}
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {	
@@ -91,6 +231,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 
 	log2File(hLogFile, L"Begin wp81listObject\n");
+	
+	listDeviceDrivers();
+	
+	GetDevicePropertiesCfgmgr32();
+	
 	
 	size_t cmdLineSize = wcslen(pCmdLine);
 	printf("Command Line: %S (%d)\n", pCmdLine, cmdLineSize);

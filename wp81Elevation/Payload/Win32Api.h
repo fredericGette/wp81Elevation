@@ -242,6 +242,30 @@ typedef BLUETOOTH_LOCAL_SERVICE_INFO * PBLUETOOTH_LOCAL_SERVICE_INFO;
 
 typedef int WINBOOL, *PWINBOOL, *LPWINBOOL;
 
+#define CR_SUCCESS                  (0x00000000)
+#define CMAPI     DECLSPEC_IMPORT
+#define CM_GETIDLIST_FILTER_PRESENT             (0x00000100)
+#define CM_LOCATE_DEVNODE_NORMAL       0x00000000
+#define DEVPROP_TYPE_STRING 0x12
+typedef _Return_type_success_(return == 0) DWORD        RETURN_TYPE;
+typedef RETURN_TYPE  CONFIGRET;
+typedef DWORD       DEVNODE, DEVINST;
+typedef DEVNODE    *PDEVNODE, *PDEVINST;
+typedef _Null_terminated_ WCHAR *DEVNODEID_W, *DEVINSTID_W;
+typedef ULONG DEVPROPTYPE, *PDEVPROPTYPE;
+typedef GUID DEVPROPGUID, *PDEVPROPGUID;
+typedef ULONG DEVPROPID, *PDEVPROPID;
+typedef struct _DEVPROPKEY {
+    DEVPROPGUID fmtid;
+    DEVPROPID pid;
+} DEVPROPKEY, *PDEVPROPKEY;
+#define DEFINE_DEVPROPKEY(name, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8, pid) EXTERN_C const DEVPROPKEY DECLSPEC_SELECTANY name = { { l, w1, w2, { b1, b2,  b3,  b4,  b5,  b6,  b7,  b8 } }, pid }
+DEFINE_DEVPROPKEY(DEVPKEY_Device_DeviceDesc,             0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0, 2);     // DEVPROP_TYPE_STRING
+DEFINE_DEVPROPKEY(DEVPKEY_Device_Driver,                 0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0, 11);    // DEVPROP_TYPE_STRING
+DEFINE_DEVPROPKEY(DEVPKEY_Device_PDOName,                0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0, 16);    // DEVPROP_TYPE_STRING
+DEFINE_DEVPROPKEY(DEVPKEY_Device_EnumeratorName,         0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0, 24);    // DEVPROP_TYPE_STRING
+DEFINE_DEVPROPKEY(DEVPKEY_Device_Parent,                 0x4340a6c5, 0x93fa, 0x4706, 0x97, 0x2c, 0x7b, 0x64, 0x80, 0x08, 0xa5, 0xa7, 8);     // DEVPROP_TYPE_STRING
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -310,9 +334,17 @@ extern "C" {
 	WINBASEAPI HANDLE WINAPI CreateThread (LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
 	WINBASEAPI WINBOOL WINAPI SetThreadPriority (HANDLE hThread, int nPriority);
 	
+	WINBASEAPI BOOL WINAPI EnumDeviceDrivers(LPVOID *lpImageBase, DWORD cb, LPDWORD lpcbNeeded);
+	WINBASEAPI DWORD WINAPI GetDeviceDriverBaseNameW(LPVOID ImageBase, LPWSTR lpBaseName, DWORD nSize);	
+	
 	NTSTATUS WINAPI NtOpenDirectoryObject(PHANDLE DirectoryHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
 	NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE DirectoryHandle, PVOID Buffer, ULONG Length, BOOLEAN ReturnSingleEntry, BOOLEAN RestartScan, PULONG Context, PULONG ReturnLength);
 	void RtlInitUnicodeString(PUNICODE_STRING DestinationString, PCWSTR SourceString);
+	
+	CMAPI CONFIGRET WINAPI CM_Get_Device_ID_List_SizeW(PULONG pulLen, PCWSTR pszFilter, ULONG ulFlags);
+	CMAPI CONFIGRET WINAPI CM_Get_Device_ID_ListW(PCWSTR pszFilter, PWCHAR Buffer, ULONG BufferLen, ULONG ulFlags);
+	CMAPI CONFIGRET WINAPI CM_Locate_DevNodeW(PDEVINST pdnDevInst,  DEVINSTID_W pDeviceID, ULONG ulFlags);
+	CMAPI CONFIGRET WINAPI CM_Get_DevNode_PropertyW(DEVINST dnDevInst, CONST DEVPROPKEY *PropertyKey, DEVPROPTYPE *PropertyType, PBYTE PropertyBuffer, PULONG PropertyBufferSize, ULONG ulFlags);
 	
 }
 
@@ -422,6 +454,8 @@ public:
 	WIN32API_DEFINE_PROC(SetPriorityClass);	
 	WIN32API_DEFINE_PROC(CreateThread);	
 	WIN32API_DEFINE_PROC(SetThreadPriority);	
+	WIN32API_DEFINE_PROC(EnumDeviceDrivers);
+	WIN32API_DEFINE_PROC(GetDeviceDriverBaseNameW);	
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -450,6 +484,11 @@ public:
 	const HMODULE m_BluetoothApis;
 	WIN32API_DEFINE_PROC(BluetoothFindFirstRadio);	
 	WIN32API_DEFINE_PROC(BluetoothSetLocalServiceInfo);
+	const HMODULE m_CfgMgr32;
+	WIN32API_DEFINE_PROC(CM_Get_Device_ID_List_SizeW);	
+	WIN32API_DEFINE_PROC(CM_Get_Device_ID_ListW);	
+	WIN32API_DEFINE_PROC(CM_Locate_DevNodeW);
+	WIN32API_DEFINE_PROC(CM_Get_DevNode_PropertyW);
 	
 
 	Win32Api()
@@ -493,7 +532,9 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, UnmapViewOfFile),
 		WIN32API_INIT_PROC(m_Kernelbase, SetPriorityClass),		
 		WIN32API_INIT_PROC(m_Kernelbase, CreateThread),		
-		WIN32API_INIT_PROC(m_Kernelbase, SetThreadPriority),		
+		WIN32API_INIT_PROC(m_Kernelbase, SetThreadPriority),
+		WIN32API_INIT_PROC(m_Kernelbase, EnumDeviceDrivers),
+		WIN32API_INIT_PROC(m_Kernelbase, GetDeviceDriverBaseNameW),		
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),
@@ -521,7 +562,12 @@ public:
 		WIN32API_INIT_PROC(m_Ntdll, RtlInitUnicodeString),
 		m_BluetoothApis(LoadLibraryExW(L"BLUETOOTHAPIS.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothFindFirstRadio),		
-		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothSetLocalServiceInfo)
+		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothSetLocalServiceInfo),
+		m_CfgMgr32(LoadLibraryExW(L"CFGMGR32.dll", NULL, NULL)),
+		WIN32API_INIT_PROC(m_CfgMgr32, CM_Get_Device_ID_List_SizeW),
+		WIN32API_INIT_PROC(m_CfgMgr32, CM_Get_Device_ID_ListW),
+		WIN32API_INIT_PROC(m_CfgMgr32, CM_Locate_DevNodeW),
+		WIN32API_INIT_PROC(m_CfgMgr32, CM_Get_DevNode_PropertyW)
 
 	{};
 
