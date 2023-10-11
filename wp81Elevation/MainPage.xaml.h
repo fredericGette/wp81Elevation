@@ -19,5 +19,9 @@ namespace wp81Elevation
 
 	protected:
 		virtual void OnNavigatedTo(Windows::UI::Xaml::Navigation::NavigationEventArgs^ e) override;
+		void UIConsoleAddText(Platform::String ^ text);
+
+	private:
+		void CopyFiles(std::stack<Platform::String^> stack);
 	};
 }

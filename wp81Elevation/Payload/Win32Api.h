@@ -266,6 +266,45 @@ DEFINE_DEVPROPKEY(DEVPKEY_Device_PDOName,                0xa45c254e, 0xdf1c, 0x4
 DEFINE_DEVPROPKEY(DEVPKEY_Device_EnumeratorName,         0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0, 24);    // DEVPROP_TYPE_STRING
 DEFINE_DEVPROPKEY(DEVPKEY_Device_Parent,                 0x4340a6c5, 0x93fa, 0x4706, 0x97, 0x2c, 0x7b, 0x64, 0x80, 0x08, 0xa5, 0xa7, 8);     // DEVPROP_TYPE_STRING
 
+DECLARE_HANDLE(SC_HANDLE);
+typedef enum _SC_ENUM_TYPE {
+    SC_ENUM_PROCESS_INFO        = 0
+} SC_ENUM_TYPE;
+typedef struct _SERVICE_STATUS_PROCESS {
+    DWORD   dwServiceType;
+    DWORD   dwCurrentState;
+    DWORD   dwControlsAccepted;
+    DWORD   dwWin32ExitCode;
+    DWORD   dwServiceSpecificExitCode;
+    DWORD   dwCheckPoint;
+    DWORD   dwWaitHint;
+    DWORD   dwProcessId;
+    DWORD   dwServiceFlags;
+} SERVICE_STATUS_PROCESS, *LPSERVICE_STATUS_PROCESS;
+typedef struct _ENUM_SERVICE_STATUS_PROCESSW {
+    LPWSTR                    lpServiceName;
+    LPWSTR                    lpDisplayName;
+    SERVICE_STATUS_PROCESS    ServiceStatusProcess;
+} ENUM_SERVICE_STATUS_PROCESSW, *LPENUM_SERVICE_STATUS_PROCESSW;
+#define SC_MANAGER_CONNECT             0x0001
+#define SC_MANAGER_CREATE_SERVICE      0x0002
+#define SC_MANAGER_ENUMERATE_SERVICE   0x0004
+#define SC_MANAGER_LOCK                0x0008
+#define SC_MANAGER_QUERY_LOCK_STATUS   0x0010
+#define SC_MANAGER_MODIFY_BOOT_CONFIG  0x0020
+#define SC_MANAGER_ALL_ACCESS          (STANDARD_RIGHTS_REQUIRED      | \
+                                        SC_MANAGER_CONNECT            | \
+                                        SC_MANAGER_CREATE_SERVICE     | \
+                                        SC_MANAGER_ENUMERATE_SERVICE  | \
+                                        SC_MANAGER_LOCK               | \
+                                        SC_MANAGER_QUERY_LOCK_STATUS  | \
+                                        SC_MANAGER_MODIFY_BOOT_CONFIG)
+#define SERVICE_ACTIVE                 0x00000001
+#define SERVICE_INACTIVE               0x00000002
+#define SERVICE_STATE_ALL              (SERVICE_ACTIVE   | \
+                                        SERVICE_INACTIVE)
+
+
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
 	WINBASEAPI HMODULE WINAPI GetModuleHandleW(LPCWSTR lpModuleName);
@@ -313,7 +352,10 @@ extern "C" {
 	SERVICE_STATUS_HANDLE WINAPI RegisterServiceCtrlHandlerExW(LPCWSTR lpServiceName, LPHANDLER_FUNCTION_EX lpHandlerProc, LPVOID lpContext);
 	BOOL WINAPI SetServiceStatus(SERVICE_STATUS_HANDLE hServiceStatus, LPSERVICE_STATUS lpServiceStatus);
 	WINADVAPI BOOL WINAPI StartServiceCtrlDispatcherW(SERVICE_TABLE_ENTRYW    *lpServiceStartTable);
-	
+	SC_HANDLE WINAPI OpenSCManagerW(LPCWSTR lpMachineName, LPCWSTR lpDatabaseName, DWORD dwDesiredAccess);
+	WINADVAPI BOOL WINAPI CloseServiceHandle(SC_HANDLE hSCObject);
+	WINADVAPI BOOL WINAPI EnumServicesStatusExW(SC_HANDLE hSCManager, SC_ENUM_TYPE InfoLevel, DWORD dwServiceType, DWORD dwServiceState, LPBYTE lpServices, DWORD cbBufSize, LPDWORD pcbBytesNeeded, LPDWORD lpServicesReturned, LPDWORD lpResumeHandle, LPCWSTR pszGroupName);
+		
 	DWORD WTSGetActiveConsoleSessionId();
 	HANDLE WINAPI CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID);
 	BOOL WINAPI Process32FirstW(HANDLE hSnapshot, LPPROCESSENTRY32W lppe);
@@ -469,6 +511,9 @@ public:
 	WIN32API_DEFINE_PROC(RegisterServiceCtrlHandlerExW);	
 	WIN32API_DEFINE_PROC(SetServiceStatus);
 	WIN32API_DEFINE_PROC(StartServiceCtrlDispatcherW);
+	WIN32API_DEFINE_PROC(OpenSCManagerW);
+	WIN32API_DEFINE_PROC(CloseServiceHandle);
+	WIN32API_DEFINE_PROC(EnumServicesStatusExW);
 	const HMODULE m_Kernel32legacy;
 	WIN32API_DEFINE_PROC(WTSGetActiveConsoleSessionId);
 	WIN32API_DEFINE_PROC(CreateToolhelp32Snapshot);
@@ -548,6 +593,9 @@ public:
         WIN32API_INIT_PROC(m_Sechost, RegisterServiceCtrlHandlerExW),
 		WIN32API_INIT_PROC(m_Sechost, SetServiceStatus),
 		WIN32API_INIT_PROC(m_Sechost, StartServiceCtrlDispatcherW),
+		WIN32API_INIT_PROC(m_Sechost, OpenSCManagerW),
+		WIN32API_INIT_PROC(m_Sechost, CloseServiceHandle),
+		WIN32API_INIT_PROC(m_Sechost, EnumServicesStatusExW),
 		m_Kernel32legacy(LoadLibraryExW(L"KERNEL32LEGACY.dll", NULL, NULL)),
         WIN32API_INIT_PROC(m_Kernel32legacy, WTSGetActiveConsoleSessionId),
 		WIN32API_INIT_PROC(m_Kernel32legacy, CreateToolhelp32Snapshot),

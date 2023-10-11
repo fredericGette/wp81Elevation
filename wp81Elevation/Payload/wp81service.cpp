@@ -8,6 +8,8 @@
 // curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\Device\"}"
 // curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\Driver\"}"
 // curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\GLOBAL??\"}"
+// curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTDEVNODE.EXE\"}"
+// curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81SERVICECTRL.EXE\"}"
 // curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81service.log
 // curl -v http://192.168.1.28:7171/download?path=C:\Data\USERS\Public\Documents\wp81listProcess.log
 // curl -v http://192.168.1.28:7171/stopService

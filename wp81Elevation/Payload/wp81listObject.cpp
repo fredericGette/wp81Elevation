@@ -216,6 +216,49 @@ void listDeviceDrivers()
 	}
 }
 
+void listServiceDrivers()
+{
+	SC_HANDLE hSCManager;
+	LPENUM_SERVICE_STATUS_PROCESSW services;
+    DWORD size, i, count, resume;
+	
+	hSCManager = win32Api.OpenSCManagerW(NULL,NULL,SC_MANAGER_ALL_ACCESS);
+	if (NULL == hSCManager) 
+    {
+		log2File(hLogFile,L"OpenSCManager failed (%d)\n", GetLastError());
+        return;
+    }
+	
+	win32Api.EnumServicesStatusExW(hSCManager, SC_ENUM_PROCESS_INFO, SERVICE_DRIVER, SERVICE_STATE_ALL, NULL, 0, &size, &count, NULL, NULL);
+    if(GetLastError() != ERROR_MORE_DATA)
+    {
+        log2File(hLogFile,L"First call to EnumServicesStatusExW failed (%d)\n", GetLastError());
+        goto end;
+    }
+    services = (LPENUM_SERVICE_STATUS_PROCESSW)HeapAlloc(GetProcessHeap(), 0, size);
+    resume = 0;
+    if(!win32Api.EnumServicesStatusExW(hSCManager, SC_ENUM_PROCESS_INFO, SERVICE_DRIVER, SERVICE_STATE_ALL, (LPBYTE)services, size, &size, &count, &resume, NULL))
+    {
+		log2File(hLogFile,L"Second call to EnumServicesStatusExW failed (%d)\n", GetLastError());
+        goto end;
+    }
+
+	log2File(hLogFile,L"Found %d service drivers\n",count);
+
+    for(i = 0; i < count; i++)
+    {
+       log2File(hLogFile,L"service=%s %s type=%d (1=kernel driver; 2=file system driver) state=%d (1=stopped; 4=running) controls=%x (1=can be stopped)\n",
+				   services[i].lpServiceName,
+                   services[i].lpDisplayName,
+				   services[i].ServiceStatusProcess.dwServiceType,
+                   services[i].ServiceStatusProcess.dwCurrentState,
+                   services[i].ServiceStatusProcess.dwControlsAccepted);
+    }
+	
+end:
+	win32Api.CloseServiceHandle(hSCManager);
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {	
 	hLogFile = win32Api.CreateFileW(L"C:\\Data\\USERS\\Public\\Documents\\wp81listObject.log",
@@ -235,6 +278,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	listDeviceDrivers();
 	
 	GetDevicePropertiesCfgmgr32();
+	
+	listServiceDrivers();
 	
 	
 	size_t cmdLineSize = wcslen(pCmdLine);

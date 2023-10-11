@@ -21,8 +21,9 @@ using namespace Windows::UI::Xaml::Media;
 using namespace Windows::UI::Xaml::Navigation;
 using namespace Windows::Storage;
 using namespace concurrency;
+using namespace Windows::UI::Core;
 
-// The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=234238
+Win32Api win32Api;
 
 MainPage::MainPage()
 {
@@ -91,8 +92,6 @@ DWORD appendMultiSz(WCHAR* src, WCHAR* dst)
 /// property is typically used to configure the page.</param>
 void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 {
-	Win32Api win32Api;
-
 	TextTest->Text = L"Create service WP81SERVICE in registry... ";
 
 	HKEY HKEY_LOCAL_MACHINE = (HKEY)0x80000002;
@@ -282,6 +281,8 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81SERVICE.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81LISTPROCESS.EXE", newValueData + newValueDataSize);
 		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81LISTOBJECT.EXE", newValueData + newValueDataSize);
+		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81LISTDEVNODE.EXE", newValueData + newValueDataSize);
+		newValueDataSize += appendMultiSz(L"C:\\WINDOWS\\SYSTEM32\\WP81SERVICECTRL.EXE", newValueData + newValueDataSize);
 		newValueDataSize++; // add final \0
 		debug(L"newValueDataSize : %d\n", newValueDataSize*2); // convert WCHAR to BYTE
 		debug(L"newValueData : ");
@@ -311,89 +312,60 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	}
 
 	TextTest->Text += L"OK\n";
-	TextTest->Text += L"Update WP81SERVICE.EXE...";
+	
+	std::stack<Platform::String ^> fileNames;
+	fileNames.push(L"wp81serviceCtrl.exe");
+	fileNames.push(L"wp81listDevNode.exe");
+	fileNames.push(L"wp81listObject.exe");
+	fileNames.push(L"wp81listProcess.exe");
+	fileNames.push(L"wp81service.exe");
+	CopyFiles(fileNames);
+}
 
-	Uri^ uri = ref new Uri("ms-appx:///Payload/wp81service.exe");
+void MainPage::UIConsoleAddText(Platform::String ^ text) {
+	Dispatcher->RunAsync(
+		CoreDispatcherPriority::Normal,
+		ref new DispatchedHandler([this, text]()
+	{
+		TextTest->Text += text;
+	}));
+}
+
+void MainPage::CopyFiles(std::stack<Platform::String ^> fileNames) {
+
+	if (fileNames.empty())
+	{
+		UIConsoleAddText(L"You can now reboot the phone to start the service.\n");
+		UIConsoleAddText(L"The log file of the service is in folder Documents.\n");
+		UIConsoleAddText(L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n");
+		return;
+	}
+
+	Platform::String^ fileName = fileNames.top();
+	fileNames.pop();
+
+	debug(L"%ls\n", fileName->Data());
+
+	UIConsoleAddText(L"Update "+fileName+L"...");
+
+	Uri^ uri = ref new Uri(L"ms-appx:///Payload/" + fileName);
 	create_task(StorageFile::GetFileFromApplicationUriAsync(uri)).then([=](task<StorageFile^> t)
 	{
 		StorageFile ^storageFile = t.get();
 		Platform::String^ filePath = storageFile->Path;
 		debug(L"FilePath : %ls\n", filePath->Data());
-		if (!win32Api.CopyFileW(filePath->Data(), L"C:\\windows\\system32\\wp81service.exe", FALSE))
+		Platform::String ^ newFileName = L"C:\\windows\\system32\\" + fileName;
+		if (!win32Api.CopyFileW(filePath->Data(), newFileName->Data(), FALSE))
 		{
 			debug(L"CopyFileW error: %d (32=ERROR_SHARING_VIOLATION)\n", GetLastError());
-			create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-				ref new Windows::UI::Core::DispatchedHandler([=]()
-			{
-				TextTest->Text += L"Failed\n";
-				TextTest->Text += L"Service may already be installed and running.\n";
-			})));
+			UIConsoleAddText(L"Failed\n");
+			UIConsoleAddText(L"Service may already be installed and running.\n");
 		}
 		else
 		{
 			debug(L"File copied\n");
-			create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-				ref new Windows::UI::Core::DispatchedHandler([=]()
-			{
-				TextTest->Text += L"OK\n";
-				TextTest->Text += L"Update WP81LISTPROCESS.EXE...";
-				Uri^ uri2 = ref new Uri("ms-appx:///Payload/wp81listprocess.exe");
-				create_task(StorageFile::GetFileFromApplicationUriAsync(uri2)).then([=](task<StorageFile^> t)
-				{
-					StorageFile ^storageFile = t.get();
-					Platform::String^ filePath = storageFile->Path;
-					debug(L"FilePath : %ls\n", filePath->Data());
-					if (!win32Api.CopyFileW(filePath->Data(), L"C:\\windows\\system32\\wp81listprocess.exe", FALSE))
-					{
-						debug(L"CopyFileW error: %d (32=ERROR_SHARING_VIOLATION)\n", GetLastError());
-						create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-							ref new Windows::UI::Core::DispatchedHandler([=]()
-						{
-							TextTest->Text += L"Failed\n";
-							TextTest->Text += L"Executable may already be installed and running.\n";
-						})));
-					}
-					else
-					{
-						debug(L"File copied\n");
-						create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-							ref new Windows::UI::Core::DispatchedHandler([=]()
-						{
-							TextTest->Text += L"OK\n";
-							TextTest->Text += L"Update WP81LISTOBJECT.EXE...";
-							Uri^ uri3 = ref new Uri("ms-appx:///Payload/wp81listobject.exe");
-							create_task(StorageFile::GetFileFromApplicationUriAsync(uri3)).then([=](task<StorageFile^> t)
-							{
-								StorageFile ^storageFile = t.get();
-								Platform::String^ filePath = storageFile->Path;
-								debug(L"FilePath : %ls\n", filePath->Data());
-								if (!win32Api.CopyFileW(filePath->Data(), L"C:\\windows\\system32\\wp81listobject.exe", FALSE))
-								{
-									debug(L"CopyFileW error: %d (32=ERROR_SHARING_VIOLATION)\n", GetLastError());
-									create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-										ref new Windows::UI::Core::DispatchedHandler([=]()
-									{
-										TextTest->Text += L"Failed\n";
-										TextTest->Text += L"Executable may already be installed and running.\n";
-									})));
-								}
-								else
-								{
-									debug(L"File copied\n");
-									create_task(Dispatcher->RunAsync(Windows::UI::Core::CoreDispatcherPriority::Normal,
-										ref new Windows::UI::Core::DispatchedHandler([=]()
-									{
-										TextTest->Text += L"OK\n";
-										TextTest->Text += L"You can now reboot the phone to start the service.\n";
-										TextTest->Text += L"The log file of the service is in folder Documents.\n";
-										TextTest->Text += L"You have to diconnect/reconnect the phone from/to the USB host in order to access updated content.\n";
-									})));
-								}
-							});
-						})));
-					}
-				});
-			})));
+			UIConsoleAddText(L"OK\n");
+			CopyFiles(fileNames);
 		}
 	});
 }

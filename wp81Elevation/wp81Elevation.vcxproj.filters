@@ -48,5 +48,7 @@
     <None Include="Payload\wp81service.exe" />
     <None Include="Payload\wp81listProcess.exe" />
     <None Include="Payload\wp81listObject.exe" />
+    <None Include="Payload\wp81listDevNode.exe" />
+    <None Include="Payload\wp81serviceCtrl.exe" />
   </ItemGroup>
 </Project>
