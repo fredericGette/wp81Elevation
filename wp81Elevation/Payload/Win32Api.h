@@ -303,7 +303,30 @@ typedef struct _ENUM_SERVICE_STATUS_PROCESSW {
 #define SERVICE_INACTIVE               0x00000002
 #define SERVICE_STATE_ALL              (SERVICE_ACTIVE   | \
                                         SERVICE_INACTIVE)
+										
+										//
+// Service object specific access type
+//
+#define SERVICE_QUERY_CONFIG           0x0001
+#define SERVICE_CHANGE_CONFIG          0x0002
+#define SERVICE_QUERY_STATUS           0x0004
+#define SERVICE_ENUMERATE_DEPENDENTS   0x0008
+#define SERVICE_START                  0x0010
+#define SERVICE_STOP                   0x0020
+#define SERVICE_PAUSE_CONTINUE         0x0040
+#define SERVICE_INTERROGATE            0x0080
+#define SERVICE_USER_DEFINED_CONTROL   0x0100
 
+#define SERVICE_ALL_ACCESS             (STANDARD_RIGHTS_REQUIRED     | \
+                                        SERVICE_QUERY_CONFIG         | \
+                                        SERVICE_CHANGE_CONFIG        | \
+                                        SERVICE_QUERY_STATUS         | \
+                                        SERVICE_ENUMERATE_DEPENDENTS | \
+                                        SERVICE_START                | \
+                                        SERVICE_STOP                 | \
+                                        SERVICE_PAUSE_CONTINUE       | \
+                                        SERVICE_INTERROGATE          | \
+                                        SERVICE_USER_DEFINED_CONTROL)
 
 extern "C" {
 	WINBASEAPI HMODULE WINAPI LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
@@ -355,6 +378,9 @@ extern "C" {
 	SC_HANDLE WINAPI OpenSCManagerW(LPCWSTR lpMachineName, LPCWSTR lpDatabaseName, DWORD dwDesiredAccess);
 	WINADVAPI BOOL WINAPI CloseServiceHandle(SC_HANDLE hSCObject);
 	WINADVAPI BOOL WINAPI EnumServicesStatusExW(SC_HANDLE hSCManager, SC_ENUM_TYPE InfoLevel, DWORD dwServiceType, DWORD dwServiceState, LPBYTE lpServices, DWORD cbBufSize, LPDWORD pcbBytesNeeded, LPDWORD lpServicesReturned, LPDWORD lpResumeHandle, LPCWSTR pszGroupName);
+	WINADVAPI SC_HANDLE WINAPI OpenServiceW(SC_HANDLE hSCManager,LPCWSTR lpServiceName,DWORD dwDesiredAccess);
+	WINADVAPI BOOL WINAPI ControlService(SC_HANDLE hService,DWORD dwControl,LPSERVICE_STATUS lpServiceStatus);
+
 		
 	DWORD WTSGetActiveConsoleSessionId();
 	HANDLE WINAPI CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID);
@@ -514,6 +540,8 @@ public:
 	WIN32API_DEFINE_PROC(OpenSCManagerW);
 	WIN32API_DEFINE_PROC(CloseServiceHandle);
 	WIN32API_DEFINE_PROC(EnumServicesStatusExW);
+	WIN32API_DEFINE_PROC(OpenServiceW);
+	WIN32API_DEFINE_PROC(ControlService);
 	const HMODULE m_Kernel32legacy;
 	WIN32API_DEFINE_PROC(WTSGetActiveConsoleSessionId);
 	WIN32API_DEFINE_PROC(CreateToolhelp32Snapshot);
@@ -596,6 +624,8 @@ public:
 		WIN32API_INIT_PROC(m_Sechost, OpenSCManagerW),
 		WIN32API_INIT_PROC(m_Sechost, CloseServiceHandle),
 		WIN32API_INIT_PROC(m_Sechost, EnumServicesStatusExW),
+		WIN32API_INIT_PROC(m_Sechost, OpenServiceW),
+		WIN32API_INIT_PROC(m_Sechost, ControlService),
 		m_Kernel32legacy(LoadLibraryExW(L"KERNEL32LEGACY.dll", NULL, NULL)),
         WIN32API_INIT_PROC(m_Kernel32legacy, WTSGetActiveConsoleSessionId),
 		WIN32API_INIT_PROC(m_Kernel32legacy, CreateToolhelp32Snapshot),

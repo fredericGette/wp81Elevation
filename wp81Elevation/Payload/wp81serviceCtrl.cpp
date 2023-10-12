@@ -35,7 +35,7 @@ void listServiceDrivers()
 
     for(i = 0; i < count; i++)
     {
-		printf("service=%S %S type=", services[i].lpServiceName, services[i].lpDisplayName);
+		printf("serviceName=%S displayName=%S type=", services[i].lpServiceName, services[i].lpDisplayName);
 		switch(services[i].ServiceStatusProcess.dwServiceType)
 		{
 			case 1:
@@ -75,10 +75,77 @@ end:
 	win32Api.CloseServiceHandle(hSCManager);
 }
 
+void stopServiceDriver(PWSTR driverName)
+{
+	SC_HANDLE hSCManager;
+	SC_HANDLE hSc;
+	SERVICE_STATUS_PROCESS ssp;
+	
+	printf("Try to stop driver [%S]\n",driverName);
+	
+	hSCManager = win32Api.OpenSCManagerW(NULL,NULL,SC_MANAGER_ALL_ACCESS);
+	if (NULL == hSCManager) 
+    {
+		printf("OpenSCManager failed (%d)\n", GetLastError());
+        return;
+    }
+
+	hSc = win32Api.OpenServiceW(hSCManager, driverName, SERVICE_ALL_ACCESS);
+	if (NULL == hSc) 
+    {
+		printf("OpenService failed (%d) 1060=ERROR_SERVICE_DOES_NOT_EXIST\n", GetLastError());
+        goto end;
+    }
+	
+	if (!win32Api.ControlService(hSc, SERVICE_CONTROL_STOP, (LPSERVICE_STATUS) &ssp))
+    {
+        printf("ControlService failed (%d) 1052=ERROR_INVALID_SERVICE_CONTROL\n", GetLastError() );
+    }
+	else
+	{
+		printf("dwServiceType=%d\n",ssp.dwServiceType);
+	}
+	
+	win32Api.CloseServiceHandle(hSc);	
+end:
+	win32Api.CloseServiceHandle(hSCManager);	
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {	
 	
-	listServiceDrivers();
-
+	size_t cmdLineSize = wcslen(pCmdLine);
+	printf("Command Line: %S (%d)\n", pCmdLine, cmdLineSize);
+	
+	PWSTR command = wcstok(pCmdLine, L" ");
+	if (command == NULL || wcscmp(command,L"list")==0)
+	{
+		listServiceDrivers();
+	}
+	else if (wcscmp(command,L"stop")==0)
+	{
+		PWSTR driverName = wcstok(NULL, L" ");
+		if (driverName != NULL)
+		{
+			stopServiceDriver(driverName);
+		}
+		else
+		{
+			printf("Missing driver name.\n");
+		}
+	}
+	else if (wcscmp(command,L"start")==0)
+	{
+	}
+	else
+	{
+		printf("Usage:\n");
+		printf("wp81serviceCtrl <command>\n");
+		printf("Commands:\n");
+		printf("list\n");
+		printf("stop <driver name>\n");
+		printf("start <driver name>\n");
+	}
+	
 	return 0;
 }
