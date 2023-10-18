@@ -405,6 +405,8 @@ extern "C" {
 	WINBASEAPI BOOL WINAPI EnumDeviceDrivers(LPVOID *lpImageBase, DWORD cb, LPDWORD lpcbNeeded);
 	WINBASEAPI DWORD WINAPI GetDeviceDriverBaseNameW(LPVOID ImageBase, LPWSTR lpBaseName, DWORD nSize);	
 	
+	WINBASEAPI BOOL WINAPI FileTimeToLocalFileTime(CONST FILETIME * lpFileTime, LPFILETIME lpLocalFileTime);
+	
 	NTSTATUS WINAPI NtOpenDirectoryObject(PHANDLE DirectoryHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
 	NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE DirectoryHandle, PVOID Buffer, ULONG Length, BOOLEAN ReturnSingleEntry, BOOLEAN RestartScan, PULONG Context, PULONG ReturnLength);
 	void RtlInitUnicodeString(PUNICODE_STRING DestinationString, PCWSTR SourceString);
@@ -523,7 +525,8 @@ public:
 	WIN32API_DEFINE_PROC(CreateThread);	
 	WIN32API_DEFINE_PROC(SetThreadPriority);	
 	WIN32API_DEFINE_PROC(EnumDeviceDrivers);
-	WIN32API_DEFINE_PROC(GetDeviceDriverBaseNameW);	
+	WIN32API_DEFINE_PROC(GetDeviceDriverBaseNameW);
+	WIN32API_DEFINE_PROC(FileTimeToLocalFileTime);
 	const HMODULE m_Sspicli;
 	WIN32API_DEFINE_PROC(LogonUserExExW);
 	WIN32API_DEFINE_PROC(GetUserNameExW);
@@ -607,7 +610,8 @@ public:
 		WIN32API_INIT_PROC(m_Kernelbase, CreateThread),		
 		WIN32API_INIT_PROC(m_Kernelbase, SetThreadPriority),
 		WIN32API_INIT_PROC(m_Kernelbase, EnumDeviceDrivers),
-		WIN32API_INIT_PROC(m_Kernelbase, GetDeviceDriverBaseNameW),		
+		WIN32API_INIT_PROC(m_Kernelbase, GetDeviceDriverBaseNameW),	
+		WIN32API_INIT_PROC(m_Kernelbase, FileTimeToLocalFileTime),
 		m_Sspicli(LoadLibraryExW(L"SSPICLI.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_Sspicli, LogonUserExExW),
 		WIN32API_INIT_PROC(m_Sspicli, GetUserNameExW),

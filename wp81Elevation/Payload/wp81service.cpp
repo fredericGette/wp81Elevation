@@ -99,17 +99,18 @@ DWORD MonitorProcess()
 
 	if (ret == WAIT_OBJECT_0) {
 		
-		FILETIME fileTime;
-		GetSystemTimeAsFileTime(&fileTime);
-		ULARGE_INTEGER theTime;
-		theTime.LowPart = fileTime.dwLowDateTime;
-		theTime.HighPart = fileTime.dwHighDateTime;
-		__int64 fileTime64Bit = theTime.QuadPart;
+		FILETIME SystemFileTime;
+		GetSystemTimeAsFileTime(&SystemFileTime);
+				
+		FILETIME LocalFileTime;
+		SYSTEMTIME	T;
+		win32Api.FileTimeToLocalFileTime(&SystemFileTime, &LocalFileTime);
+		FileTimeToSystemTime(&LocalFileTime, &T);
 		
 		WCHAR dataWChar[4096];
 		size_t convertedChars;
 		mbstowcs_s(&convertedChars, dataWChar, strlen(m_pDBBuffer->data)+1, m_pDBBuffer->data, 4096);
-		log2File(hDebugLog, L"[%I64u] %d %s", fileTime64Bit, m_pDBBuffer->dwProcessId, dataWChar);
+		log2File(hDebugLog, L"%02hd-%02hd %02hd:%02hd:%02hd.%03hd %d %s", T.wMonth, T.wDay, T.wHour, T.wMinute, T.wSecond, T.wMilliseconds, m_pDBBuffer->dwProcessId, dataWChar);
 
 		// signal buffer ready
 		SetEvent(m_hEventBufferReady);
