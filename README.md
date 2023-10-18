@@ -65,6 +65,17 @@ curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system3
 curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81LISTOBJECT.EXE \\GLOBAL??\"}"  
 ```
 
+- WP81LISTDEVNODE.EXE *\<no parameter\>*  
+List the device instances that are currently present on the system.
+
+- WP81SERVICECTRL.EXE *\<command\>*  
+List the driver services. Can also stop a driver service.
+
+Examples of usages:  
+```
+curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81SERVICECTRL.EXE list\"}"  
+curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81SERVICECTRL.EXE stop wp81debuglogger\"}"  
+```  
 
 ## How to add a file into a .apx and build the package.
 
