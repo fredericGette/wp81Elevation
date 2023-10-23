@@ -410,6 +410,8 @@ extern "C" {
 	NTSTATUS WINAPI NtOpenDirectoryObject(PHANDLE DirectoryHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
 	NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE DirectoryHandle, PVOID Buffer, ULONG Length, BOOLEAN ReturnSingleEntry, BOOLEAN RestartScan, PULONG Context, PULONG ReturnLength);
 	void RtlInitUnicodeString(PUNICODE_STRING DestinationString, PCWSTR SourceString);
+	NTSTATUS WINAPI NtOpenSymbolicLinkObject(PHANDLE LinkHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes);
+	NTSTATUS WINAPI NtQuerySymbolicLinkObject(HANDLE LinkHandle, PUNICODE_STRING LinkTarget, PULONG ReturnedLength );
 	
 	CMAPI CONFIGRET WINAPI CM_Get_Device_ID_List_SizeW(PULONG pulLen, PCWSTR pszFilter, ULONG ulFlags);
 	CMAPI CONFIGRET WINAPI CM_Get_Device_ID_ListW(PCWSTR pszFilter, PWCHAR Buffer, ULONG BufferLen, ULONG ulFlags);
@@ -445,6 +447,8 @@ extern "C" {
 
 #define DIRECTORY_QUERY                 (0x0001)
 #define DIRECTORY_TRAVERSE              (0x0002)
+#define OBJ_CASE_INSENSITIVE 0x00000040L
+#define SYMBOLIC_LINK_QUERY 0x0001
 
 typedef struct _OBJECT_DIRECTORY_INFORMATION {
     UNICODE_STRING Name;
@@ -557,6 +561,8 @@ public:
 	WIN32API_DEFINE_PROC(NtOpenDirectoryObject);
 	WIN32API_DEFINE_PROC(NtQueryDirectoryObject);
 	WIN32API_DEFINE_PROC(RtlInitUnicodeString);
+	WIN32API_DEFINE_PROC(NtOpenSymbolicLinkObject);
+	WIN32API_DEFINE_PROC(NtQuerySymbolicLinkObject);
 	const HMODULE m_BluetoothApis;
 	WIN32API_DEFINE_PROC(BluetoothFindFirstRadio);	
 	WIN32API_DEFINE_PROC(BluetoothSetLocalServiceInfo);
@@ -642,6 +648,8 @@ public:
 		WIN32API_INIT_PROC(m_Ntdll, NtOpenDirectoryObject),
 		WIN32API_INIT_PROC(m_Ntdll, NtQueryDirectoryObject),
 		WIN32API_INIT_PROC(m_Ntdll, RtlInitUnicodeString),
+		WIN32API_INIT_PROC(m_Ntdll, NtOpenSymbolicLinkObject),
+		WIN32API_INIT_PROC(m_Ntdll, NtQuerySymbolicLinkObject),
 		m_BluetoothApis(LoadLibraryExW(L"BLUETOOTHAPIS.DLL", NULL, NULL)),
 		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothFindFirstRadio),		
 		WIN32API_INIT_PROC(m_BluetoothApis, BluetoothSetLocalServiceInfo),
