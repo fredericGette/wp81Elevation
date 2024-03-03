@@ -3,7 +3,7 @@ Install a little web server running as a service on a Windows Phone 8.1
 
 ## Features
 
-Currently, only 4 actions are possible:
+Currently, only 4 actions are possible (note: the phone IP address is displayed by the application) :
 
 - Get the status of the service
 ```
