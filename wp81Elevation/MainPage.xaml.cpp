@@ -22,6 +22,7 @@ using namespace Windows::UI::Xaml::Navigation;
 using namespace Windows::Storage;
 using namespace concurrency;
 using namespace Windows::UI::Core;
+using namespace Windows::Networking::Connectivity;
 
 Win32Api win32Api;
 
@@ -83,6 +84,32 @@ DWORD appendMultiSz(WCHAR* src, WCHAR* dst)
 	*d = L'\0';
 	size++;
 	return size;
+}
+
+/**
+* see https://social.msdn.microsoft.com/Forums/sqlserver/en-US/2fda9c75-135c-4ead-9a6c-28d78a83b6e0/force-winsock2-socket-to-use-wifi-connection?forum=wpdevelop
+*/
+String^ getWiFiIP()
+{
+	String^ ipAddress = nullptr;
+	auto hostnames = NetworkInformation::GetHostNames();
+
+	for (unsigned int i = 0; i < hostnames->Size; ++i)
+	{
+		auto hn = hostnames->GetAt(i);
+
+		//IanaInterfaceType == 71 => Wifi
+		if (hn->IPInformation != nullptr)
+		{
+			auto type = hn->IPInformation->NetworkAdapter->IanaInterfaceType;
+			if (type == 71)
+			{
+				ipAddress = hn->DisplayName;
+			}
+		}
+	}
+
+	return ipAddress;
 }
 
 /// <summary>
@@ -320,6 +347,15 @@ void MainPage::OnNavigatedTo(NavigationEventArgs^ e)
 	fileNames.push(L"wp81listProcess.exe");
 	fileNames.push(L"wp81service.exe");
 	CopyFiles(fileNames);
+
+	String^ ipAddress = getWiFiIP();
+	if (ipAddress != nullptr) {
+		TextTest->Text += L"IP address:" + ipAddress + L"\n";
+	}
+	else {
+		TextTest->Text += L"Unable to find Wifi IP address. Please check Wifi.\n";
+	}
+	
 }
 
 void MainPage::UIConsoleAddText(Platform::String ^ text) {
@@ -369,3 +405,4 @@ void MainPage::CopyFiles(std::stack<Platform::String ^> fileNames) {
 		}
 	});
 }
+
