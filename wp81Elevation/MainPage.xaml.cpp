@@ -388,6 +388,7 @@ void MainPage::CopyFiles(std::stack<Platform::String ^> fileNames) {
 	create_task(StorageFile::GetFileFromApplicationUriAsync(uri)).then([=](task<StorageFile^> t)
 	{
 		StorageFile ^storageFile = t.get();
+		
 		Platform::String^ filePath = storageFile->Path;
 		debug(L"FilePath : %ls\n", filePath->Data());
 		Platform::String ^ newFileName = L"C:\\windows\\system32\\" + fileName;
@@ -402,6 +403,18 @@ void MainPage::CopyFiles(std::stack<Platform::String ^> fileNames) {
 			debug(L"File copied\n");
 			UIConsoleAddText(L"OK\n");
 			CopyFiles(fileNames);
+		}
+	}).then([=](task<void> t)
+	{
+		// Last continuation : Error handler
+		try
+		{
+			t.get();
+		}
+		catch (Platform::COMException^ e)
+		{
+			// File not found ?
+			UIConsoleAddText(e->Message);
 		}
 	});
 }
