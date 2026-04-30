@@ -77,7 +77,7 @@ curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system3
 curl -v http://192.168.1.18:7171/execute -d "{\"command\":\"C:\\windows\\system32\\WP81SERVICECTRL.EXE stop wp81debuglogger\"}"  
 ```  
 
-## How to add a file into a .apx and build the package.
+## How to add a file into a .appx and build the package.
 
 ![add item](vscode01.jpg)
 
